@@ -358,14 +358,19 @@ server.on('error', (err) => {
 });
 
 server.listen(PORT, HOST, async () => {
+  // With PORT=0 the kernel picks a free port, so the real one is only known
+  // now. The shell reads this line to learn where to point the window.
+  const actualPort = server.address().port;
+  process.stdout.write(`MACPUFFIN_PORT=${actualPort}\n`);
+
   const hw = await hardware();
-  const url = `http://${HOST}:${PORT}`;
+  const url = `http://${HOST}:${actualPort}`;
   process.stdout.write(
     `\n  MacPuffin v${VERSION} ready\n` +
       `  ${hw.model} · ${hw.cpu} · ${(hw.memTotal / 1024 ** 3).toFixed(0)} GB · ${hw.osName} ${hw.osVersion}\n` +
       `  ${url}\n  log: ${LOG_FILE}\n\n`,
   );
-  logInfo('server.start', { version: VERSION, port: PORT, model: hw.model, os: `${hw.osName} ${hw.osVersion}` });
+  logInfo('server.start', { version: VERSION, port: actualPort, model: hw.model, os: `${hw.osName} ${hw.osVersion}` });
   if (process.env.NO_OPEN !== '1') sh('open', [url]);
 });
 

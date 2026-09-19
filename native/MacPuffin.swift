@@ -173,8 +173,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
 
     private func settle(from candidate: Int, attemptsLeft: Int, resources: URL) {
         guard attemptsLeft > 0 else {
-            fail("Every port between \(defaultPort) and \(defaultPort + 9) is in use.\n\n"
-                 + "Quit whatever is using them and open MacPuffin again.")
+            // Every preferred port is busy. Rather than refuse to open, ask the
+            // kernel for any free port at all — it will always have one, so
+            // there is no arrangement of other software that can lock us out.
+            guard let node = findNode() else {
+                fail("The bundled Node runtime is missing.\n\nRe-downloading MacPuffin should fix it.")
+                return
+            }
+            spawn(node: node, cwd: resources, port: 0)
             return
         }
         probe(port: candidate) { state in
@@ -183,13 +189,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
                 self.port = candidate
                 self.load()
             case .free:
-                self.port = candidate
                 guard let node = findNode() else {
                     self.fail("The bundled Node runtime is missing and no system Node was found.\n\n"
                              + "Re-downloading MacPuffin should fix it.")
                     return
                 }
-                self.spawn(node: node, cwd: resources)
+                self.spawn(node: node, cwd: resources, port: candidate)
             case .occupied:
                 // Something else owns this port — a stale instance, or an
                 // unrelated program. Never adopt it; move along.
@@ -198,16 +203,37 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         }
     }
 
-    private func spawn(node: String, cwd: URL) {
+    /// Start the server. `port` of 0 means "any free port"; the server prints
+    /// the one it received and that is read back here.
+    private func spawn(node: String, cwd: URL, port requested: Int) {
         let proc = Process()
         proc.executableURL = URL(fileURLWithPath: node)
         proc.arguments = ["server.js"]
         proc.currentDirectoryURL = cwd
         var env = ProcessInfo.processInfo.environment
         env["NO_OPEN"] = "1"
-        env["PORT"] = String(port)
+        env["PORT"] = String(requested)
         proc.environment = env
 
+        // The pipe must be drained continuously: the server logs every action,
+        // and a full pipe buffer would block it mid-scan.
+        let output = Pipe()
+        proc.standardOutput = output
+        var announced = false
+        output.fileHandleForReading.readabilityHandler = { handle in
+            let chunk = handle.availableData
+            guard !chunk.isEmpty, !announced,
+                  let text = String(data: chunk, encoding: .utf8) else { return }
+            for line in text.split(separator: "\n") where line.hasPrefix("MACPUFFIN_PORT=") {
+                let value = Int(line.dropFirst("MACPUFFIN_PORT=".count).trimmingCharacters(in: .whitespaces))
+                if let value {
+                    announced = true
+                    DispatchQueue.main.async { self.port = value }
+                }
+            }
+        }
+
+        port = requested == 0 ? 0 : requested
         do {
             try proc.run()
         } catch {
@@ -272,6 +298,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
     }
 
     private func waitForServer(deadline: Date, completion: @escaping (Bool) -> Void) {
+        // While the port is still 0 the server has not announced itself yet.
+        guard port != 0 else {
+            if Date() > deadline { return completion(false) }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                self.waitForServer(deadline: deadline, completion: completion)
+            }
+            return
+        }
         probe(port: port) { state in
             if state == .usable { return completion(true) }
             if Date() > deadline { return completion(false) }
