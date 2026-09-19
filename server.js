@@ -347,6 +347,16 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
+server.on('error', (err) => {
+  if (err.code === 'EADDRINUSE') {
+    logError('server.portInUse', { port: PORT });
+    process.stderr.write(`\n  Port ${PORT} is already in use. Set PORT to something else.\n\n`);
+    process.exit(2);
+  }
+  logError('server.listenFailed', { code: err.code, message: err.message });
+  process.exit(1);
+});
+
 server.listen(PORT, HOST, async () => {
   const hw = await hardware();
   const url = `http://${HOST}:${PORT}`;

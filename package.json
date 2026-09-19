@@ -2,7 +2,7 @@
   "name": "macpuffin",
   "version": "1.0.0",
   "private": true,
-  "description": "A local-only Mac cockpit: storage, memory, junk, large and old files, duplicates — with zero dependencies.",
+  "description": "A local-only Mac cockpit: storage, memory, junk, large and old files, duplicates \u2014 with zero dependencies.",
   "type": "module",
   "main": "server.js",
   "license": "MIT",

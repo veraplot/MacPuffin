@@ -165,18 +165,36 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
             return
         }
 
-        // A server already listening on the port (started from Terminal) is
-        // reused rather than fought over.
-        probe(port: port) { alreadyRunning in
-            if alreadyRunning {
+        // Try a small range: adopt our own server if one is already up, skip
+        // past anything else holding a port, and start on the first free one.
+        // Insisting on a single port means one stale process blocks the app.
+        settle(from: defaultPort, attemptsLeft: 10, resources: resources)
+    }
+
+    private func settle(from candidate: Int, attemptsLeft: Int, resources: URL) {
+        guard attemptsLeft > 0 else {
+            fail("Every port between \(defaultPort) and \(defaultPort + 9) is in use.\n\n"
+                 + "Quit whatever is using them and open MacPuffin again.")
+            return
+        }
+        probe(port: candidate) { state in
+            switch state {
+            case .usable:
+                self.port = candidate
                 self.load()
-                return
+            case .free:
+                self.port = candidate
+                guard let node = findNode() else {
+                    self.fail("The bundled Node runtime is missing and no system Node was found.\n\n"
+                             + "Re-downloading MacPuffin should fix it.")
+                    return
+                }
+                self.spawn(node: node, cwd: resources)
+            case .occupied:
+                // Something else owns this port — a stale instance, or an
+                // unrelated program. Never adopt it; move along.
+                self.settle(from: candidate + 1, attemptsLeft: attemptsLeft - 1, resources: resources)
             }
-            guard let node = findNode() else {
-                self.fail("Node.js was not found.\n\nMacPuffin needs Node 20 or newer. Install it with:\n\n    brew install node\n\nthen open MacPuffin again.")
-                return
-            }
-            self.spawn(node: node, cwd: resources)
         }
     }
 
@@ -200,7 +218,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
 
         // Wait for the port, then show the UI. 20 s is generous: the server
         // only reads hardware facts before it listens.
-        waitForServer(deadline: Date().addingTimeInterval(20)) { ready in
+        waitForServer(deadline: Date().addingTimeInterval(25)) { ready in
             if ready {
                 self.load()
             } else {
@@ -209,18 +227,53 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         }
     }
 
-    private func probe(port: Int, completion: @escaping (Bool) -> Void) {
+    /// What is on a port, from this app's point of view.
+    enum PortState {
+        case free          // nothing listening: we can start here
+        case usable        // a MacPuffin of this version, serving properly
+        case occupied      // something else, or a broken instance: leave it alone
+    }
+
+    /// Decide whether a port can be adopted.
+    ///
+    /// Answering `/api/hardware` is not enough. A previous instance whose bundle
+    /// has since been replaced keeps answering that from memory while every file
+    /// request fails, and adopting it shows the user a bare `not found`. So the
+    /// version must match this build *and* the interface itself must load.
+    private func probe(port: Int, completion: @escaping (PortState) -> Void) {
         var request = URLRequest(url: URL(string: "http://127.0.0.1:\(port)/api/hardware")!)
         request.timeoutInterval = 1.5
-        URLSession.shared.dataTask(with: request) { _, response, _ in
-            let ok = (response as? HTTPURLResponse)?.statusCode == 200
-            DispatchQueue.main.async { completion(ok) }
+        request.cachePolicy = .reloadIgnoringLocalCacheData
+
+        URLSession.shared.dataTask(with: request) { data, response, error in
+            let finish: (PortState) -> Void = { s in DispatchQueue.main.async { completion(s) } }
+
+            if let error = error as NSError?,
+               error.domain == NSURLErrorDomain,
+               error.code == NSURLErrorCannotConnectToHost || error.code == NSURLErrorNetworkConnectionLost {
+                return finish(.free)
+            }
+            guard (response as? HTTPURLResponse)?.statusCode == 200,
+                  let data,
+                  let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let version = json["version"] as? String,
+                  version == (Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String)
+            else { return finish(.occupied) }
+
+            // It claims to be this build; confirm it can still serve the page.
+            var page = URLRequest(url: URL(string: "http://127.0.0.1:\(port)/")!)
+            page.timeoutInterval = 1.5
+            page.cachePolicy = .reloadIgnoringLocalCacheData
+            URLSession.shared.dataTask(with: page) { _, pageResponse, _ in
+                let ok = (pageResponse as? HTTPURLResponse)?.statusCode == 200
+                finish(ok ? .usable : .occupied)
+            }.resume()
         }.resume()
     }
 
     private func waitForServer(deadline: Date, completion: @escaping (Bool) -> Void) {
-        probe(port: port) { ready in
-            if ready { return completion(true) }
+        probe(port: port) { state in
+            if state == .usable { return completion(true) }
             if Date() > deadline { return completion(false) }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                 self.waitForServer(deadline: deadline, completion: completion)
