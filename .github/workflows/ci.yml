@@ -33,14 +33,33 @@ jobs:
           fi
           node -e "const p=require('./package.json');if(p.dependencies||p.devDependencies){console.error('dependencies found');process.exit(1)}"
 
+      # Node 20 can run the app but not the coverage flags, which arrived in 22.
+      # Running the plain suite here still proves the runtime floor holds.
+      - name: Run the test suite
+        run: npm test
+
+  coverage:
+    name: Coverage thresholds
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
       - name: Run tests with coverage thresholds
         run: npm run test:coverage
 
   build:
-    name: Build MacPuffin.app
+    name: Build app and DMG
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
 
       - name: Build the app bundle
         run: ./build-app.sh "$RUNNER_TEMP"
@@ -57,6 +76,47 @@ jobs:
           test -f "$APP/Contents/Info.plist"            || { echo "missing Info.plist"; exit 1; }
           test -f "$APP/Contents/Resources/app/server.js" || { echo "missing server"; exit 1; }
           codesign --verify --strict "$APP" && echo "signature ok"
+
+      # The DMG is what people actually download, so it is built and opened on
+      # every push — not only at release time, when a packaging fault would be
+      # discovered too late.
+      - name: Build the disk image
+        run: ./make-dmg.sh "$RUNNER_TEMP/dist"
+
+      - name: Mount the DMG and check what a user would get
+        run: |
+          MNT=$(hdiutil attach "$RUNNER_TEMP/dist/MacPuffin.dmg" -nobrowse -readonly \
+                | tail -1 | sed 's/^.*\(\/Volumes\/.*\)$/\1/')
+          echo "mounted at $MNT"
+          test -d "$MNT/MacPuffin.app"     || { echo "no app in the image"; exit 1; }
+          test -L "$MNT/Applications"      || { echo "no Applications drop target"; exit 1; }
+          test -f "$MNT/Read me first.txt" || { echo "no readme"; exit 1; }
+          ARCHS=$(lipo -archs "$MNT/MacPuffin.app/Contents/MacOS/MacPuffin")
+          echo "architectures: $ARCHS"
+          case "$ARCHS" in *arm64*)  ;; *) echo "missing arm64";  exit 1 ;; esac
+          case "$ARCHS" in *x86_64*) ;; *) echo "missing x86_64"; exit 1 ;; esac
+          codesign --verify --strict "$MNT/MacPuffin.app"
+          hdiutil detach "$MNT"
+
+      - name: Check the checksum file matches the image
+        run: |
+          cd "$RUNNER_TEMP/dist"
+          shasum -a 256 -c MacPuffin.dmg.sha256
+
+      - name: Report the download size
+        run: |
+          SIZE=$(du -h "$RUNNER_TEMP/dist/MacPuffin.dmg" | cut -f1 | tr -d ' ')
+          echo "DMG size: $SIZE"
+          echo "### Download built: \`$SIZE\`" >> "$GITHUB_STEP_SUMMARY"
+
+      # Kept for 14 days so a pull request can be downloaded and tried directly.
+      - name: Upload the DMG as a build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: MacPuffin-dmg-${{ github.sha }}
+          path: ${{ runner.temp }}/dist/MacPuffin.dmg
+          retention-days: 14
+          if-no-files-found: error
 
   audit:
     name: Supply chain & network audit

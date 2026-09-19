@@ -28,6 +28,12 @@ const MIME = {
   '.ico': 'image/x-icon',
 };
 
+/** A 1x1 fully transparent PNG, served when a bundle ships no icon. */
+const BLANK_PNG = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=',
+  'base64',
+);
+
 /** Results live in memory so switching tabs never re-runs a scan. */
 const cache = new Map();
 const running = new Map();
@@ -177,11 +183,10 @@ const server = http.createServer(async (req, res) => {
         json(res, 404, { error: 'not an application bundle' });
         return;
       }
-      const png = await appIcon(target);
-      if (!png) {
-        json(res, 404, { error: 'no icon' });
-        return;
-      }
+      // A bundle with no extractable icon answers with a transparent pixel
+      // rather than a 404: the slot renders empty either way, and the console
+      // stays free of errors that are not errors.
+      const png = (await appIcon(target)) || BLANK_PNG;
       res.writeHead(200, {
         'content-type': 'image/png',
         'content-length': png.length,

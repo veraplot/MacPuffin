@@ -5,11 +5,11 @@
 # MacPuffin
 
 **A local-only cockpit for your Mac — storage, memory, junk, large and old files, duplicates.**
-Zero dependencies. No telemetry. Nothing leaves the machine.
+Zero dependencies. No telemetry. Your files never leave the machine.
 
 [![CI](https://github.com/veraplot/MacPuffin/actions/workflows/ci.yml/badge.svg)](https://github.com/veraplot/MacPuffin/actions/workflows/ci.yml)
-[![Coverage](https://img.shields.io/badge/coverage-77.8%25-brightgreen?logo=codecov&logoColor=white)](#tests)
-[![Tests](https://img.shields.io/badge/tests-54%20passing-brightgreen?logo=nodedotjs&logoColor=white)](#tests)
+[![Coverage](https://img.shields.io/badge/coverage-92%25%20lines-brightgreen?logo=codecov&logoColor=white)](#tests)
+[![Tests](https://img.shields.io/badge/tests-108%20passing-brightgreen?logo=nodedotjs&logoColor=white)](#tests)
 [![Dependencies](https://img.shields.io/badge/dependencies-0-brightgreen?logo=npm&logoColor=white)](#zero-dependencies)
 [![Network](https://img.shields.io/badge/network-update%20check%20only-brightgreen?logo=wireshark&logoColor=white)](SECURITY.md#the-one-external-request)
 
@@ -41,7 +41,7 @@ Zero dependencies. No telemetry. Nothing leaves the machine.
 [![Latest release](https://img.shields.io/github/v/release/veraplot/MacPuffin?logo=github&label=latest)](https://github.com/veraplot/MacPuffin/releases/latest)
 [![Downloads](https://img.shields.io/github/downloads/veraplot/MacPuffin/total?logo=github&label=downloads)](https://github.com/veraplot/MacPuffin/releases)
 [![Universal binary](https://img.shields.io/badge/universal-arm64%20%2B%20x86__64-success?logo=apple&logoColor=white)](#compatibility)
-[![DMG size](https://img.shields.io/badge/size-1.2%20MB-lightgrey)](https://github.com/veraplot/MacPuffin/releases/latest)
+[![DMG size](https://img.shields.io/badge/size-1%20MB-lightgrey)](https://github.com/veraplot/MacPuffin/releases/latest)
 
 **Universal build — Apple Silicon and Intel. macOS 11 Big Sur or newer.**
 
@@ -79,10 +79,10 @@ everything it did.
 | | MacPuffin | Typical cleaner |
 |---|---|---|
 | Dependencies | **0** | hundreds of transitive packages |
-| Network access | **none** — no code path exists | telemetry, licence checks, updates |
+| Network access | **one** anonymous version check, off by a setting | telemetry, licence checks, updates |
 | Deletion | move to Trash, reversible | often permanent |
 | Audit trail | every action logged with errno | silent |
-| Source | ~1,500 readable lines | closed binary |
+| Source | ~4,800 readable lines | closed binary |
 | Price | free, MIT | subscription |
 | Install | double-click, no installer | `.pkg` + helper daemon |
 
@@ -365,7 +365,7 @@ server is reachable by any process running as your user.
 
 ## Tests
 
-54 tests, no framework — `node:test` from the standard library.
+108 tests, no framework — `node:test` from the standard library.
 
 ```bash
 npm test                # run the suite
@@ -377,11 +377,16 @@ npm run test:coverage   # with coverage thresholds (fails under 70%)
 | `tests/unit.test.js` | byte formatting, top-N heap, concurrency pool, every safety rule, file classification, logging |
 | `tests/scan.test.js` | real fixture tree: deep scan, duplicate detection, bundle handling, trash + empty round-trips |
 | `tests/server.test.js` | boots the real server: CSP headers, CSRF guard, protected-path refusals, path traversal, live system readings |
+| `tests/system.test.js` | the real machine: memory split, page-size handling, CPU, process aggregation, volumes, battery |
+| `tests/scanners.test.js` | junk, applications, home map, Spotlight, icon extraction, environment discovery, crash records, bulk and fallback trashing |
 
-Current coverage of `lib/`: **77.8% lines, 80.5% branches, 76.0% functions**.
+Current coverage of `lib/`: **92.0% lines, 76.4% branches, 88.2% functions**. The
+build fails below 90 / 72 / 85, so coverage cannot quietly rot.
 
-CI runs the suite on macOS against Node 20, 22 and 24, builds the `.app`, and
-verifies the signature on every push.
+CI runs the suite on macOS against Node 20, 22 and 24, builds the `.app` and
+the DMG, and verifies the signature on every push. The coverage thresholds run
+separately on Node 22, because the flags that enforce them do not exist in
+Node 20 — the app itself runs fine there, only the test tooling needs 22.
 
 ## Architecture
 
@@ -456,8 +461,16 @@ package, no network request, and they inherit the row's colour.
 ## Contributing
 
 Issues and pull requests are welcome. Keep the two rules that make this project
-what it is: **no dependencies**, and **no outbound network calls**. CI enforces
-both.
+what it is:
+
+1. **No dependencies** — not runtime, not development, not build.
+2. **No outbound network calls from the server.** Your files are read and
+   analysed entirely on your machine. The only external request in the whole
+   project is the anonymous version check in the native shell, described in
+   [SECURITY.md](SECURITY.md#the-one-external-request); CI holds it to a
+   host allowlist.
+
+CI enforces both.
 
 ## License
 

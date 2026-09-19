@@ -28,7 +28,7 @@
     "start": "node server.js",
     "dev": "node --watch server.js",
     "test": "node --test \"tests/**/*.test.js\"",
-    "test:coverage": "node --test --experimental-test-coverage --test-coverage-exclude=\"tests/**\" --test-coverage-lines=70 --test-coverage-branches=70 \"tests/**/*.test.js\"",
+    "test:coverage": "node --test --experimental-test-coverage --test-coverage-exclude=\"tests/**\" --test-coverage-lines=90 --test-coverage-branches=72 --test-coverage-functions=85 \"tests/**/*.test.js\"",
     "build:app": "./build-app.sh"
   },
   "engines": {

@@ -9,9 +9,14 @@ rules are non-negotiable — CI enforces every one of them.
    library and the macOS command-line tools cannot do it, we either write it or
    we do without. The `audit` CI job fails on any non-builtin import, and on
    the appearance of `node_modules` or a lockfile.
-2. **No outbound network calls.** The server contains no `fetch`,
-   `http.request`, `net.connect`, `dgram` or WebSocket, and the socket binds
-   `127.0.0.1`. CI greps for all of these.
+2. **No outbound network calls from the server.** The server contains no
+   `fetch`, `http.request`, `net.connect`, `dgram` or WebSocket, and the socket
+   binds `127.0.0.1`. CI greps for all of these.
+
+   The native shell makes exactly one external request — the anonymous version
+   check against `api.github.com`. CI holds `native/*.swift` to a host
+   allowlist, so adding a second destination fails the build. Nothing that
+   reads or reports on a user's files may ever contact the network.
 
 ## Also enforced
 
@@ -37,7 +42,7 @@ parts (`xcode-select --install`).
 ## Before opening a pull request
 
 ```bash
-npm run test:coverage
+npm run test:coverage   # needs Node 22+; the flags do not exist in Node 20
 ```
 
 If you touched anything in `lib/trash.js`, add a test for it. That file decides
