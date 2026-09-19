@@ -1,0 +1,107 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+# The whole product is macOS-specific: it parses df / vm_stat / ps output and
+# moves files to ~/.Trash, so the tests only mean anything on a real macOS box.
+jobs:
+  test:
+    name: Tests · Node ${{ matrix.node }}
+    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ['20', '22', '24']
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+
+      - name: Confirm there are no dependencies to install
+        run: |
+          if [ -d node_modules ]; then echo "node_modules must not be committed"; exit 1; fi
+          if [ -f package-lock.json ] || [ -f pnpm-lock.yaml ] || [ -f yarn.lock ]; then
+            echo "a lockfile means a dependency crept in"; exit 1
+          fi
+          node -e "const p=require('./package.json');if(p.dependencies||p.devDependencies){console.error('dependencies found');process.exit(1)}"
+
+      - name: Run tests with coverage thresholds
+        run: npm run test:coverage
+
+  build:
+    name: Build MacPuffin.app
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build the app bundle
+        run: ./build-app.sh "$RUNNER_TEMP"
+
+      - name: Verify the bundle is complete
+        run: |
+          APP="$RUNNER_TEMP/MacPuffin.app"
+          test -x "$APP/Contents/MacOS/MacPuffin"        || { echo "missing binary"; exit 1; }
+          ARCHS=$(lipo -archs "$APP/Contents/MacOS/MacPuffin")
+          echo "architectures: $ARCHS"
+          case "$ARCHS" in *arm64*)  ;; *) echo "missing arm64 slice";  exit 1 ;; esac
+          case "$ARCHS" in *x86_64*) ;; *) echo "missing x86_64 slice"; exit 1 ;; esac
+          test -x "$APP/Contents/Resources/mptrash"     || { echo "missing trash helper"; exit 1; }
+          test -f "$APP/Contents/Info.plist"            || { echo "missing Info.plist"; exit 1; }
+          test -f "$APP/Contents/Resources/app/server.js" || { echo "missing server"; exit 1; }
+          codesign --verify --strict "$APP" && echo "signature ok"
+
+  audit:
+    name: Supply chain & network audit
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Assert every import is a Node builtin
+        run: |
+          BAD=$(grep -rhoE "from '[^']+'" server.js lib | grep -v "from 'node:" | grep -v "from '\./" || true)
+          if [ -n "$BAD" ]; then echo "non-builtin import found:"; echo "$BAD"; exit 1; fi
+          echo "all imports are builtins or local"
+
+      - name: Assert the server opens no outbound connections
+        run: |
+          BAD=$(grep -rnE "fetch\(|https?\.(get|request)|net\.connect|dgram|new WebSocket" server.js lib || true)
+          if [ -n "$BAD" ]; then echo "outbound network primitive found:"; echo "$BAD"; exit 1; fi
+          echo "no outbound network primitives in the server"
+
+      - name: Assert no command runs through a shell
+        run: |
+          BAD=$(grep -rnE "shell: *true|exec\(|execSync\(" server.js lib || true)
+          if [ -n "$BAD" ]; then echo "shell execution found:"; echo "$BAD"; exit 1; fi
+          echo "every command uses execFile with an argv array"
+
+      - name: Assert the socket stays on loopback
+        run: |
+          grep -q "const HOST = '127.0.0.1'" server.js || { echo "HOST is not loopback"; exit 1; }
+          echo "bound to 127.0.0.1"
+
+      - name: Assert the native shell contacts only GitHub releases and localhost
+        run: |
+          # -h so the filename prefix does not end up in the host list.
+          HOSTS=$(grep -hoE 'https?://[a-zA-Z0-9.-]+' native/*.swift | sed -E 's|https?://||' | sort -u)
+          echo "hosts referenced:"; echo "$HOSTS" | sed 's/^/  /'
+          for h in $HOSTS; do
+            case "$h" in
+              api.github.com|github.com|127.0.0.1) ;;
+              *) echo "unexpected host in the native shell: $h"; exit 1 ;;
+            esac
+          done
+          echo "only api.github.com, github.com and 127.0.0.1"
+
+      - name: Assert the update check stays optional and non-blocking
+        run: |
+          grep -q 'disableUpdateCheck' native/MacPuffin.swift || { echo "no opt-out"; exit 1; }
+          grep -q 'timeoutInterval' native/MacPuffin.swift || { echo "no timeout"; exit 1; }
+          echo "opt-out and timeout present"

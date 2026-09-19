@@ -1,0 +1,45 @@
+name: Feature request
+description: Suggest something MacPuffin should do
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Two rules shape what can be accepted: **no dependencies** and **no
+        outbound network calls from the server**. Ideas that fit inside those
+        have a much better chance.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem would this solve
+      description: The situation you are in, rather than the feature itself.
+      placeholder: I cannot tell which of my Xcode simulator runtimes are still needed.
+    validations:
+      required: true
+
+  - type: textarea
+    id: idea
+    attributes:
+      label: What you have in mind
+    validations:
+      required: false
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Which part of the app
+      options:
+        - Cockpit
+        - Cleanup
+        - Large files
+        - Old files
+        - Duplicates
+        - Applications
+        - Storage map
+        - Memory & CPU
+        - Developer tools
+        - The app itself (window, updates, packaging)
+        - Something else
+    validations:
+      required: true

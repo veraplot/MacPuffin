@@ -1,0 +1,72 @@
+name: Release
+
+# Tag a version to publish it:
+#   git tag v1.0.0 && git push origin v1.0.0
+#
+# The DMG is attached to the GitHub release, which is what makes
+# /releases/latest/download/MacPuffin.dmg a stable link.
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  dmg:
+    name: Build and publish the DMG
+    runs-on: macos-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Run the test suite before shipping anything
+        run: npm run test:coverage
+
+      - name: Build the disk image
+        run: ./make-dmg.sh "$RUNNER_TEMP/dist"
+
+      - name: Verify the packaged app is universal and signed
+        run: |
+          MNT=$(hdiutil attach "$RUNNER_TEMP/dist/MacPuffin.dmg" -nobrowse -readonly \
+                | tail -1 | sed 's/^.*\(\/Volumes\/.*\)$/\1/')
+          echo "mounted at $MNT"
+          ARCHS=$(lipo -archs "$MNT/MacPuffin.app/Contents/MacOS/MacPuffin")
+          echo "architectures: $ARCHS"
+          case "$ARCHS" in *arm64*) ;; *) echo "missing arm64"; exit 1 ;; esac
+          case "$ARCHS" in *x86_64*) ;; *) echo "missing x86_64"; exit 1 ;; esac
+          codesign --verify --strict "$MNT/MacPuffin.app"
+          hdiutil detach "$MNT"
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          gh release create "$TAG" \
+            "$RUNNER_TEMP/dist/MacPuffin.dmg" \
+            "$RUNNER_TEMP/dist/MacPuffin.dmg.sha256" \
+            --title "MacPuffin $TAG" \
+            --notes-file - <<'NOTES'
+          ### Download
+
+          **[MacPuffin.dmg](https://github.com/veraplot/MacPuffin/releases/latest/download/MacPuffin.dmg)** — universal (Apple Silicon + Intel), macOS 11 or newer.
+
+          Drag it to Applications, then **right-click → Open** the first time: the
+          build is ad-hoc signed, not notarised, so a plain double-click is blocked.
+
+          Requires [Node.js](https://nodejs.org) 20+ (`brew install node`).
+
+          Full capability list: [RELEASE_NOTES.md](https://github.com/veraplot/MacPuffin/blob/main/RELEASE_NOTES.md)
+
+          Verify the download:
+
+          ```
+          shasum -a 256 -c MacPuffin.dmg.sha256
+          ```
+          NOTES

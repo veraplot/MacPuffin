@@ -1,0 +1,364 @@
+<!doctype html>
+<html lang="en" data-view="cockpit">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>MacPuffin</title>
+<link rel="stylesheet" href="/style.css" />
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><polygon points='16,2 30,9 30,23 16,30 2,23 2,9' fill='%23ef4444'/></svg>" />
+</head>
+<body>
+
+<!-- Lucide icons (ISC licence), inlined as a sprite: no network, no build step. -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-gauge" viewBox="0 0 24 24"><path d="m12 14 4-4"/><path d="M3.34 19a10 10 0 1 1 17.32 0"/></symbol>
+  <symbol id="i-sparkles" viewBox="0 0 24 24"><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/><path d="M20 3v4"/><path d="M22 5h-4"/><path d="M4 17v2"/><path d="M5 18H3"/></symbol>
+  <symbol id="i-harddrive" viewBox="0 0 24 24"><line x1="22" x2="2" y1="12" y2="12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/><line x1="6" x2="6.01" y1="16" y2="16"/><line x1="10" x2="10.01" y1="16" y2="16"/></symbol>
+  <symbol id="i-history" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/></symbol>
+  <symbol id="i-copy" viewBox="0 0 24 24"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></symbol>
+  <symbol id="i-grid" viewBox="0 0 24 24"><rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/></symbol>
+  <symbol id="i-terminal" viewBox="0 0 24 24"><path d="m7 11 2-2-2-2"/><path d="M11 13h4"/><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/></symbol>
+  <symbol id="i-braces" viewBox="0 0 24 24"><path d="M8 3H7a2 2 0 0 0-2 2v5a2 2 0 0 1-2 2 2 2 0 0 1 2 2v5c0 1.1.9 2 2 2h1"/><path d="M16 21h1a2 2 0 0 0 2-2v-5c0-1.1.9-2 2-2a2 2 0 0 1-2-2V5a2 2 0 0 0-2-2h-1"/></symbol>
+  <symbol id="i-folder" viewBox="0 0 24 24"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></symbol>
+  <symbol id="i-layers" viewBox="0 0 24 24"><path d="m12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z"/><path d="m22 17.65-9.17 4.16a2 2 0 0 1-1.66 0L2 17.65"/><path d="m22 12.65-9.17 4.16a2 2 0 0 1-1.66 0L2 12.65"/></symbol>
+  <symbol id="i-bug" viewBox="0 0 24 24"><path d="m8 2 1.88 1.88"/><path d="M14.12 3.88 16 2"/><path d="M9 7.13v-1a3.003 3.003 0 1 1 6 0v1"/><path d="M12 20c-3.3 0-6-2.7-6-6v-3a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v3c0 3.3-2.7 6-6 6"/><path d="M12 20v-9"/><path d="M6.53 9C4.6 8.8 3 7.1 3 5"/><path d="M6 13H2"/><path d="M3 21c0-2.1 1.7-3.9 3.8-4"/><path d="M20.97 5c0 2.1-1.6 3.8-3.5 4"/><path d="M22 13h-4"/><path d="M17.2 17c2.1.1 3.8 1.9 3.8 4"/></symbol>
+  <symbol id="i-lightbulb" viewBox="0 0 24 24"><path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"/><path d="M9 18h6"/><path d="M10 22h4"/></symbol>
+  <symbol id="i-pie" viewBox="0 0 24 24"><path d="M21.21 15.89A10 10 0 1 1 8 2.83"/><path d="M22 12A10 10 0 0 0 12 2v10z"/></symbol>
+  <symbol id="i-ram" viewBox="0 0 24 24"><path d="M6 19v-3"/><path d="M10 19v-3"/><path d="M14 19v-3"/><path d="M18 19v-3"/><path d="M8 11V9"/><path d="M16 11V9"/><path d="M12 11V9"/><path d="M2 15h20"/><path d="M2 7a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v1.1a2 2 0 0 0 0 3.837V17a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-5.1a2 2 0 0 0 0-3.837Z"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></symbol>
+  <symbol id="i-cpu" viewBox="0 0 24 24"><rect width="16" height="16" x="4" y="4" rx="2"/><rect width="6" height="6" x="9" y="9" rx="1"/><path d="M15 2v2"/><path d="M15 20v2"/><path d="M2 15h2"/><path d="M2 9h2"/><path d="M20 15h2"/><path d="M20 9h2"/><path d="M9 2v2"/><path d="M9 20v2"/></symbol>
+</svg>
+<div class="aurora" aria-hidden="true">
+  <span class="blob b1"></span><span class="blob b2"></span><span class="blob b3"></span>
+  <span class="grain"></span>
+</div>
+
+<div class="app">
+  <aside class="sidebar">
+    <div class="brand">
+      <img class="brand-mark" src="/brand.png" width="30" height="30" alt="" />
+      <div>
+        <strong>MacPuffin <span class="ver" id="app-version"></span></strong>
+        <small id="machine">…</small>
+      </div>
+    </div>
+
+    <nav class="nav" id="nav">
+      <button class="nav-item is-active" data-view="cockpit"><svg class="ic"><use href="#i-gauge"/></svg>Cockpit</button>
+      <button class="nav-item" data-view="cleanup"><svg class="ic"><use href="#i-sparkles"/></svg>Cleanup</button>
+      <button class="nav-item" data-view="large"><svg class="ic"><use href="#i-harddrive"/></svg>Large files</button>
+      <button class="nav-item" data-view="old"><svg class="ic"><use href="#i-history"/></svg>Old files</button>
+      <button class="nav-item" data-view="dupes"><svg class="ic"><use href="#i-copy"/></svg>Duplicates</button>
+      <button class="nav-item" data-view="apps"><svg class="ic"><use href="#i-grid"/></svg>Applications</button>
+      <div class="nav-sep"></div>
+      <button class="nav-item" data-view="storage"><svg class="ic"><use href="#i-pie"/></svg>Storage map</button>
+      <button class="nav-item" data-view="perf"><svg class="ic"><use href="#i-cpu"/></svg>Memory &amp; CPU</button>
+      <button class="nav-item" data-view="devtools"><svg class="ic"><use href="#i-terminal"/></svg>Developer tools</button>
+    </nav>
+
+    <div class="sidebar-help">
+      <button class="help-link" id="btn-report-bug"><svg class="ic"><use href="#i-bug"/></svg>Report a bug</button>
+      <button class="help-link" id="btn-request-feature"><svg class="ic"><use href="#i-lightbulb"/></svg>Request a feature</button>
+    </div>
+
+    <div class="sidebar-foot">
+      <div class="mini-gauge">
+        <div class="mini-bar"><span id="side-disk-fill"></span></div>
+        <div class="mini-meta"><span>Startup disk</span><b id="side-disk-text">—</b></div>
+      </div>
+      <div class="mini-gauge">
+        <div class="mini-bar alt"><span id="side-mem-fill"></span></div>
+        <div class="mini-meta"><span>Memory</span><b id="side-mem-text">—</b></div>
+      </div>
+    </div>
+  </aside>
+
+  <main class="content">
+    <header class="topbar">
+      <div class="crumb"><h1 id="view-title">Cockpit</h1><p id="view-sub">Live picture of this Mac</p></div>
+      <div class="pills">
+        <span class="pill" id="pill-cpu" title="Processor load right now, across all cores"><svg class="pill-ic"><use href="#i-cpu"/></svg><b>—</b></span>
+        <span class="pill" id="pill-mem" title="Share of physical memory in use"><svg class="pill-ic"><use href="#i-ram"/></svg><b>—</b></span>
+        <span class="pill" id="pill-up" title="Uptime: how long since this Mac last restarted"><svg class="pill-ic"><use href="#i-clock"/></svg><b>—</b> <span class="pill-lbl">since restart</span></span>
+      </div>
+    </header>
+
+    <div class="banner banner-crash" id="crash-banner" hidden>
+      <svg class="banner-ic"><use href="#i-bug"/></svg>
+      <div class="banner-copy">
+        <b id="crash-title">MacPuffin hit an error</b>
+        <p id="crash-note"></p>
+      </div>
+      <button class="btn btn-ghost" id="btn-crash-view">See report</button>
+      <button class="btn btn-ghost" id="btn-crash-dismiss">Dismiss</button>
+      <button class="btn btn-danger" id="btn-crash-share">Share the crash report</button>
+    </div>
+
+    <div class="banner banner-update" id="update-banner" hidden>
+      <img class="banner-mark" src="/brand.png" width="30" height="34" alt="" />
+      <div class="banner-copy">
+        <b id="update-title">A new version is available</b>
+        <p id="update-note"></p>
+      </div>
+      <button class="btn btn-ghost" id="btn-update-later">Later</button>
+      <a class="btn btn-primary" id="btn-update-get" href="#" target="_blank" rel="noreferrer">Get it</a>
+    </div>
+
+    <div class="banner" id="trash-banner" hidden>
+      <span class="banner-gem"></span>
+      <div class="banner-copy">
+        <b id="trash-banner-title">Waiting in the Trash</b>
+        <p id="trash-banner-note"></p>
+      </div>
+      <button class="btn btn-ghost" id="btn-reveal-trash">Open Trash</button>
+      <button class="btn btn-danger" id="btn-empty-trash">Empty Trash</button>
+    </div>
+
+    <!-- ── COCKPIT ───────────────────────────────────────────── -->
+    <section class="view is-active" id="view-cockpit">
+      <div class="hero">
+        <div class="hero-gauge">
+          <svg viewBox="0 0 220 220" class="ring">
+            <defs>
+              <linearGradient id="gradDisk" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0%" stop-color="#3b82f6" /><stop offset="50%" stop-color="#f59e0b" /><stop offset="100%" stop-color="#ef4444" />
+              </linearGradient>
+            </defs>
+            <circle class="ring-track" cx="110" cy="110" r="92" />
+            <circle class="ring-fill" id="disk-ring" cx="110" cy="110" r="92" stroke="url(#gradDisk)" />
+          </svg>
+          <div class="hero-gauge-label">
+            <b id="disk-free">—</b>
+            <span>free of <i id="disk-total">—</i></span>
+          </div>
+        </div>
+        <div class="hero-copy">
+          <p class="eyebrow" id="hero-eyebrow">Startup disk</p>
+          <h2 id="hero-headline">Reading your Mac…</h2>
+          <p class="hero-note" id="hero-note">Run a scan to see what is eating the disk.</p>
+          <div class="hero-actions">
+            <button class="btn btn-primary" id="btn-scan-all">Scan this Mac</button>
+            <button class="btn btn-ghost" id="btn-open-storage">Storage map</button>
+          </div>
+          <div class="hero-progress" id="hero-progress" hidden>
+            <div class="bar"><span id="hero-bar"></span></div>
+            <p id="hero-progress-text">Starting…</p>
+            <button class="btn btn-ghost btn-tiny" id="btn-stop">Stop scan</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="grid cards">
+        <button class="card gem-clean" data-goto="cleanup">
+          <span class="gem"></span>
+          <h3><svg class="ic card-ic"><use href="#i-sparkles"/></svg>Cleanup</h3>
+          <b class="card-value" id="c-junk">—</b>
+          <p class="card-note" id="c-junk-note">Caches, logs, build leftovers</p>
+        </button>
+        <button class="card gem-large" data-goto="large">
+          <span class="gem"></span>
+          <h3><svg class="ic card-ic"><use href="#i-harddrive"/></svg>Large files</h3>
+          <b class="card-value" id="c-large">—</b>
+          <p class="card-note" id="c-large-note">Biggest single files</p>
+        </button>
+        <button class="card gem-old" data-goto="old">
+          <span class="gem"></span>
+          <h3><svg class="ic card-ic"><use href="#i-history"/></svg>Old files</h3>
+          <b class="card-value" id="c-old">—</b>
+          <p class="card-note" id="c-old-note">Untouched for months</p>
+        </button>
+        <button class="card gem-dupe" data-goto="dupes">
+          <span class="gem"></span>
+          <h3><svg class="ic card-ic"><use href="#i-copy"/></svg>Duplicates</h3>
+          <b class="card-value" id="c-dupe">—</b>
+          <p class="card-note" id="c-dupe-note">Same file, many copies</p>
+        </button>
+        <button class="card gem-apps" data-goto="apps">
+          <span class="gem"></span>
+          <h3><svg class="ic card-ic"><use href="#i-grid"/></svg>Applications</h3>
+          <b class="card-value" id="c-apps">—</b>
+          <p class="card-note" id="c-apps-note">Installed app weight</p>
+        </button>
+        <button class="card gem-perf" data-goto="perf">
+          <span class="gem"></span>
+          <h3><svg class="ic card-ic"><use href="#i-cpu"/></svg>Memory</h3>
+          <b class="card-value" id="c-mem">—</b>
+          <p class="card-note" id="c-mem-note">Live pressure</p>
+        </button>
+      </div>
+
+      <div class="grid two">
+        <div class="panel">
+          <div class="panel-head"><h3>Top memory consumers</h3><span class="live">live</span></div>
+          <ul class="proc-list" id="cockpit-mem"></ul>
+        </div>
+        <div class="panel">
+          <div class="panel-head"><h3>Top CPU consumers</h3><span class="live">live</span></div>
+          <ul class="proc-list" id="cockpit-cpu"></ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── CLEANUP ───────────────────────────────────────────── -->
+    <section class="view" id="view-cleanup">
+      <div class="toolbar">
+        <button class="btn btn-primary" data-scan="junk">Scan junk</button>
+        <span class="toolbar-stat" id="junk-stat">Not scanned yet</span>
+        <span class="spacer"></span>
+        <button class="btn btn-danger" data-action="trash-selected" data-scope="junk" disabled>Move selection to Trash</button>
+      </div>
+      <div class="scanbar" id="junk-scanbar" hidden><div class="bar indet"><span></span></div><p id="junk-scan-text"></p></div>
+      <div class="panel flush"><div class="table" id="junk-table"><p class="empty">Scan to list reclaimable caches, logs and build leftovers.</p></div></div>
+    </section>
+
+    <!-- ── LARGE ─────────────────────────────────────────────── -->
+    <section class="view" id="view-large">
+      <div class="toolbar">
+        <button class="btn btn-primary" data-scan="deep">Deep scan home</button>
+        <button class="btn btn-ghost" data-scan="spotlight">Fast (Spotlight)</button>
+        <label class="field">Min size
+          <select id="large-min"><option value="100">100 MB</option><option value="250">250 MB</option><option value="500" selected>500 MB</option><option value="1024">1 GB</option><option value="5120">5 GB</option></select>
+        </label>
+        <label class="field check"><input type="checkbox" id="deep-thorough" /> Include caches &amp; node_modules</label>
+        <span class="toolbar-stat" id="large-stat">Not scanned yet</span>
+        <span class="spacer"></span>
+        <button class="btn btn-danger" data-action="trash-selected" data-scope="large" disabled>Move selection to Trash</button>
+      </div>
+      <div class="scanbar" id="deep-scanbar" hidden><div class="bar indet"><span></span></div><p id="deep-scan-text"></p></div>
+      <div class="panel flush"><div class="table" id="large-table"><p class="empty">Deep scan walks your home folder. Spotlight is instant but only sees indexed files.</p></div></div>
+    </section>
+
+    <!-- ── OLD ───────────────────────────────────────────────── -->
+    <section class="view" id="view-old">
+      <div class="toolbar">
+        <button class="btn btn-primary" data-scan="deep">Deep scan home</button>
+        <label class="field">Untouched for
+          <select id="old-days"><option value="90">90 days</option><option value="180" selected>6 months</option><option value="365">1 year</option><option value="730">2 years</option></select>
+        </label>
+        <span class="toolbar-stat" id="old-stat">Not scanned yet</span>
+        <span class="spacer"></span>
+        <button class="btn btn-danger" data-action="trash-selected" data-scope="old" disabled>Move selection to Trash</button>
+      </div>
+      <div class="panel flush"><div class="table" id="old-table"><p class="empty">Finds files over 10 MB you have not opened or changed in a long time.</p></div></div>
+    </section>
+
+    <!-- ── DUPES ─────────────────────────────────────────────── -->
+    <section class="view" id="view-dupes">
+      <div class="toolbar">
+        <button class="btn btn-primary" data-scan="deep">Deep scan home</button>
+        <span class="toolbar-stat" id="dupe-stat">Not scanned yet</span>
+        <span class="spacer"></span>
+        <button class="btn btn-ghost" data-action="select-dupes">Select all but newest</button>
+        <button class="btn btn-danger" data-action="trash-selected" data-scope="dupes" disabled>Move selection to Trash</button>
+      </div>
+      <div class="panel flush"><div class="table" id="dupe-table"><p class="empty">Matches files by size and content fingerprint (first + last 64 KB).</p></div></div>
+    </section>
+
+    <!-- ── APPS ──────────────────────────────────────────────── -->
+    <section class="view" id="view-apps">
+      <div class="toolbar">
+        <button class="btn btn-primary" data-scan="apps">Scan applications</button>
+        <span class="toolbar-stat" id="apps-stat">Not scanned yet</span>
+        <span class="spacer"></span>
+        <button class="btn btn-danger" data-action="trash-selected" data-scope="apps" disabled>Move selection to Trash</button>
+      </div>
+      <div class="scanbar" id="apps-scanbar" hidden><div class="bar indet"><span></span></div><p id="apps-scan-text"></p></div>
+      <div class="panel flush"><div class="table" id="apps-table"><p class="empty">Lists every app in /Applications with its size and last-used date.</p></div></div>
+    </section>
+
+    <!-- ── STORAGE ───────────────────────────────────────────── -->
+    <section class="view" id="view-storage">
+      <div class="toolbar">
+        <button class="btn btn-primary" data-scan="home">Map home folder</button>
+        <span class="toolbar-stat" id="home-stat">Not mapped yet</span>
+      </div>
+      <div class="scanbar" id="home-scanbar" hidden><div class="bar indet"><span></span></div><p id="home-scan-text"></p></div>
+
+      <div class="panel">
+        <div class="panel-head"><h3>Volumes</h3></div>
+        <div id="volumes"></div>
+      </div>
+
+      <div class="grid two">
+        <div class="panel">
+          <div class="panel-head"><h3>Home folder breakdown</h3></div>
+          <div id="home-bars"><p class="empty">Map the home folder to see where space went.</p></div>
+        </div>
+        <div class="panel">
+          <div class="panel-head"><h3>By file type</h3></div>
+          <div id="cat-bars"><p class="empty">Comes from the deep scan.</p></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── DEVELOPER TOOLS ───────────────────────────────────── -->
+    <section class="view" id="view-devtools">
+      <div class="toolbar">
+        <button class="btn btn-primary" data-scan="devtools">Scan developer tools</button>
+        <span class="toolbar-stat" id="dev-stat">Not scanned yet</span>
+      </div>
+      <div class="scanbar" id="devtools-scanbar" hidden><div class="bar indet"><span></span></div><p id="devtools-scan-text"></p></div>
+
+      <div class="grid cards dev-cards">
+        <div class="card gem-clean"><span class="gem"></span>
+          <h3><svg class="ic card-ic"><use href="#i-braces"/></svg>Python environments</h3>
+          <b class="card-value" id="c-py">—</b><p class="card-note" id="c-py-note">venv · conda · pyenv</p></div>
+        <div class="card gem-apps"><span class="gem"></span>
+          <h3><svg class="ic card-ic"><use href="#i-folder"/></svg>node_modules</h3>
+          <b class="card-value" id="c-nm">—</b><p class="card-note" id="c-nm-note">per project, plus shared stores</p></div>
+        <div class="card gem-large"><span class="gem"></span>
+          <h3><svg class="ic card-ic"><use href="#i-layers"/></svg>Docker images</h3>
+          <b class="card-value" id="c-dk">—</b><p class="card-note" id="c-dk-note">local image store</p></div>
+      </div>
+
+      <div class="panel flush"><div class="panel-head padded"><h3>Python environments</h3><span class="toolbar-stat" id="py-stat"></span></div>
+        <div class="table" id="py-table"><p class="empty">Finds virtualenvs, conda environments, pyenv versions and the interpreters on your PATH.</p></div></div>
+
+      <div class="panel flush"><div class="panel-head padded"><h3>node_modules</h3><span class="toolbar-stat" id="nm-stat"></span></div>
+        <div class="table" id="nm-table"><p class="empty">Every project folder with dependencies installed, plus the shared package stores.</p></div></div>
+
+      <div class="panel flush"><div class="panel-head padded"><h3>Docker images</h3><span class="toolbar-stat" id="dk-stat"></span></div>
+        <div class="table" id="dk-table"><p class="empty">Requires Docker to be installed and running.</p></div></div>
+    </section>
+
+    <!-- ── PERF ──────────────────────────────────────────────── -->
+    <section class="view" id="view-perf">
+      <div class="grid two">
+        <div class="panel">
+          <div class="panel-head"><h3>Memory</h3><span class="live">live</span></div>
+          <div class="mem-total"><b id="perf-mem-used">—</b><span id="perf-mem-total">of —</span></div>
+          <div class="stackbar" id="mem-stack"></div>
+          <ul class="legend" id="mem-legend"></ul>
+          <div class="kv" id="swap-kv"></div>
+        </div>
+        <div class="panel">
+          <div class="panel-head"><h3>Processor</h3><span class="live">live</span></div>
+          <div class="mem-total"><b id="perf-cpu-busy">—</b><span id="perf-cpu-model">—</span></div>
+          <div class="spark" id="cpu-spark"></div>
+          <div class="kv" id="cpu-kv"></div>
+        </div>
+      </div>
+      <div class="panel flush">
+        <div class="panel-head padded"><h3>Running processes</h3><div class="seg" id="proc-sort"><button class="is-on" data-sort="mem">By memory</button><button data-sort="cpu">By CPU</button></div></div>
+        <div class="table" id="proc-table"></div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<div class="modal" id="modal" hidden>
+  <div class="modal-card">
+    <h3 id="modal-title">Confirm</h3>
+    <div id="modal-body"></div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" id="modal-cancel">Cancel</button>
+      <button class="btn btn-danger" id="modal-ok">Move to Trash</button>
+    </div>
+  </div>
+</div>
+
+<div class="toasts" id="toasts"></div>
+
+<script type="module" src="/app.js"></script>
+</body>
+</html>

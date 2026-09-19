@@ -1,0 +1,63 @@
+---
+name: macpuffin-icon
+aspect: 1:1
+size: 1024x1024
+count: 4
+light-and-dark: 0
+---
+// Icone d'application macOS pour MacPuffin (Veraplot). Registre vise : les
+// logos de projets Apache / CNCF — mascotte animale a plat, vectorielle,
+// geometrique, lisible a 32 px. Pas d'illustration realiste, pas de 3D.
+//
+// Le macareux (puffin) tombe bien : bec rouge-orange raye de bleu-gris, tete
+// noire, face blanche. La palette de l'app en decoule deja.
+//
+// Risques connus sur ce type de sujet :
+//   - le modele ajoute du texte : interdit explicitement plus bas ;
+//   - il derive vers le 3D brillant facon App Store 2012 : interdit ;
+//   - il dessine un macareux realiste et plumeux : interdit, on veut du plat ;
+//   - les yeux d'oiseaux partent souvent en vrille : cadrage de face, symetrique,
+//     yeux decrits comme des cercles simples.
+//
+// count: 4 pour comparer, puis on garde la meilleure piste.
+
+A flat vector logo mark of a puffin's head, facing the viewer, centred and
+perfectly symmetrical. Open-source project mascot style, in the spirit of
+Apache Software Foundation and CNCF project logos: bold geometric shapes,
+clean even outlines, generous negative space, immediately readable when
+scaled down to 32 by 32 pixels.
+
+Construction. The head is a single rounded shape. The face patch is a large
+white oval occupying the middle of the head. Two eyes are simple flat circles,
+evenly spaced, each a small dark circle inside a slightly larger light ring.
+The beak is a broad triangular wedge pointing down from between the eyes,
+split into three clean vertical bands of colour. Everything is built from
+circles, triangles and rounded rectangles — no feather texture, no fur, no
+rendered detail, no anatomical accuracy.
+
+Colour, use these hex values only and nothing else:
+  deep graphite  #1C1917  the head
+  off white      #F6F1E9  the face patch
+  red            #EF4444  the outer band of the beak
+  crimson        #DC2626  shading on the red band
+  amber          #F59E0B  the middle band of the beak
+  blue           #3B82F6  the inner band of the beak, nearest the face
+  deep blue      #1D4ED8  shading on the blue band
+The red-to-blue transition across the beak is the signature of the mark and
+must be clearly visible: red on the outside, amber in the middle, blue closest
+to the head.
+
+Background: a single flat square of #0C0B0A filling the whole frame, edge to
+edge. No rounded corner, no border, no frame, no drop shadow behind the mark,
+no vignette. The puffin head sits centred with comfortable margin on all four
+sides, occupying roughly two thirds of the frame.
+
+Strictly forbidden: any text, letter, number, word or signature anywhere in
+the image. No 3D rendering, no glossy highlights, no bevels, no embossing, no
+skeuomorphism. No gradients other than the flat bands described above. No
+photographic or painterly texture. No body, no wings, no feet, no background
+scenery, no water, no cliffs, no sky. No watermark. No mockup, no device
+frame, no presentation of the icon on a screen or a dock.
+
+Flat two-dimensional artwork only, as if drawn with a vector tool and exported
+straight to PNG.

@@ -1,0 +1,40 @@
+{
+  "name": "macpuffin",
+  "version": "1.0.0",
+  "private": true,
+  "description": "A local-only Mac cockpit: storage, memory, junk, large and old files, duplicates — with zero dependencies.",
+  "type": "module",
+  "main": "server.js",
+  "license": "MIT",
+  "author": "Veraplot",
+  "homepage": "https://github.com/veraplot/MacPuffin#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/veraplot/MacPuffin.git"
+  },
+  "bugs": {
+    "url": "https://github.com/veraplot/MacPuffin/issues"
+  },
+  "keywords": [
+    "macos",
+    "disk-usage",
+    "duplicate-finder",
+    "system-monitor",
+    "cleanup",
+    "zero-dependencies",
+    "local-first"
+  ],
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "test": "node --test \"tests/**/*.test.js\"",
+    "test:coverage": "node --test --experimental-test-coverage --test-coverage-exclude=\"tests/**\" --test-coverage-lines=70 --test-coverage-branches=70 \"tests/**/*.test.js\"",
+    "build:app": "./build-app.sh"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "os": [
+    "darwin"
+  ]
+}

@@ -1,0 +1,49 @@
+name: Bug report
+description: Something in MacPuffin behaves incorrectly
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time. If MacPuffin showed you a crash banner, use
+        **Share the crash report** in the app instead — it fills all of this in
+        for you.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What did you do, and what did MacPuffin do instead of what you expected?
+      placeholder: I selected three cache folders and clicked Move to Trash. Two moved, one reported an error.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+    validations:
+      required: false
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: |
+        The app fills this in when you open the issue from the sidebar. Otherwise:
+        MacPuffin version (sidebar, next to the name), Mac model, chip, macOS version, Node version.
+      render: text
+    validations:
+      required: true
+
+  - type: textarea
+    id: log
+    attributes:
+      label: Relevant log lines
+      description: |
+        `~/Library/Logs/MacPuffin/macpuffin.log` records every action and failure.
+        Paste anything from around the time of the problem. Paths may contain
+        personal folder names — edit them out if you would rather not share them.
+      render: text
+    validations:
+      required: false
