@@ -1,0 +1,56 @@
+<!doctype html>
+<html><head><meta charset="utf-8" />
+<style>
+  /* GitHub's social preview card: 1280x640, shown wherever the repo link is
+     shared. Rendered by build-social.sh; the result is docs/social-preview.png. */
+  html, body { margin: 0; width: 1280px; height: 640px; }
+
+  .card {
+    position: relative; width: 1280px; height: 640px; overflow: hidden;
+    background:
+      radial-gradient(70% 90% at 8% 0%, rgba(220,38,38,0.55) 0%, transparent 60%),
+      radial-gradient(75% 95% at 96% 100%, rgba(37,99,235,0.6) 0%, transparent 62%),
+      linear-gradient(160deg, #17151300 0%, #0c0b0a 70%), #0c0b0a;
+    display: grid; grid-template-columns: 460px 1fr; align-items: center;
+    font-family: -apple-system, "SF Pro Display", "Helvetica Neue", sans-serif;
+    color: #f6f1e9;
+  }
+
+  .mark { display: grid; place-items: center; }
+  .mark img { width: 336px; height: 300px; filter: drop-shadow(0 28px 60px rgba(0,0,0,0.6)); }
+
+  .copy { padding-right: 54px; }
+  h1 { font-size: 82px; font-weight: 700; letter-spacing: -0.035em; margin: 0 0 14px; }
+  .tag { font-size: 29px; line-height: 1.32; color: #cfc6b8; margin: 0 0 34px; max-width: 30ch; white-space: nowrap; }
+
+  ul { list-style: none; margin: 0 0 34px; padding: 0; display: grid; gap: 13px; }
+  li { display: flex; align-items: center; gap: 13px; font-size: 23px; color: #e7e0d4; }
+  li b { color: #fff; font-weight: 650; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; flex: none;
+         background: linear-gradient(135deg, #ef4444, #2563eb); }
+
+  .foot { display: flex; align-items: center; gap: 14px; flex-wrap: nowrap; font-size: 21px; color: #9c9389; }
+  .pill { white-space: nowrap; padding: 7px 17px; border-radius: 999px; font-size: 20px; font-weight: 600;
+          background: rgba(255,255,255,0.08); box-shadow: inset 0 0 0 1px rgba(255,255,255,0.14); color: #f6f1e9; }
+  .pill.free { background: linear-gradient(135deg, #ef4444, #2563eb); box-shadow: none; }
+  .repo { white-space: nowrap; color: #8b8378; font-size: 21px; font-family: ui-monospace, "SF Mono", Menlo, monospace; }
+</style></head>
+<body>
+  <div class="card">
+    <div class="mark"><img src="icon.png" alt="" /></div>
+    <div class="copy">
+      <h1>MacPuffin</h1>
+      <p class="tag">A local-only cockpit for your Mac.</p>
+      <ul>
+        <li><span class="dot"></span><b>Zero</b> dependencies — nothing from npm, ever</li>
+        <li><span class="dot"></span>Your files <b>never leave the machine</b></li>
+        <li><span class="dot"></span>Nothing is deleted — everything goes to the Trash</li>
+      </ul>
+      <div class="foot">
+        <span class="pill free">Free &amp; MIT</span>
+        <span class="pill">Apple&nbsp;Silicon + Intel</span>
+        <span class="repo">github.com/veraplot/MacPuffin</span>
+      </div>
+    </div>
+  </div>
+</body></html>

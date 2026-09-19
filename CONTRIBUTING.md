@@ -63,6 +63,26 @@ CSS with no build step, so there is no type checker to catch a broken selector.
 If the folder is a standard macOS location that cannot be moved, add it to
 `CONTAINER_ONLY` in `lib/trash.js` so it is emptied rather than moved.
 
+## Signing and releases
+
+**Contributors need none of this.** Pull requests build ad-hoc signed, the tests
+run, and the DMG is attached to the run as an artifact you can download and try.
+No certificate, no Apple account, nothing to configure.
+
+Signing only happens on a tagged release, from repository secrets, and only
+maintainers can trigger it. Nobody has to build from their laptop for a release
+to be signed — the tag is what does it.
+
+Two certificates exist and they are not interchangeable:
+
+| Certificate | Purpose |
+|---|---|
+| Apple Development | running your own builds on your own machines |
+| **Developer ID Application** | distributing outside the App Store — the only one Apple will notarise |
+
+A build signed with Apple Development is rejected by notarisation, so an
+accidental swap fails loudly rather than shipping something users cannot open.
+
 ## Commit messages
 
 Plain and descriptive. Explain why, not what — the diff already says what.

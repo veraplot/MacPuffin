@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="docs/icon.png" width="120" alt="MacPuffin" />
+<img src="logo.png" width="120" alt="MacPuffin" />
 
 # MacPuffin
 
@@ -41,7 +41,7 @@ Zero dependencies. No telemetry. Your files never leave the machine.
 [![Latest release](https://img.shields.io/github/v/release/veraplot/MacPuffin?logo=github&label=latest)](https://github.com/veraplot/MacPuffin/releases/latest)
 [![Downloads](https://img.shields.io/github/downloads/veraplot/MacPuffin/total?logo=github&label=downloads)](https://github.com/veraplot/MacPuffin/releases)
 [![Universal binary](https://img.shields.io/badge/universal-arm64%20%2B%20x86__64-success?logo=apple&logoColor=white)](#compatibility)
-[![DMG size](https://img.shields.io/badge/size-1%20MB-lightgrey)](https://github.com/veraplot/MacPuffin/releases/latest)
+[![DMG size](https://img.shields.io/badge/download-70%20MB-lightgrey)](https://github.com/veraplot/MacPuffin/releases/latest)
 
 **Universal build — Apple Silicon and Intel. macOS 11 Big Sur or newer.**
 
@@ -90,25 +90,53 @@ everything it did.
 
 **[MacPuffin.dmg](https://github.com/veraplot/MacPuffin/releases/latest/download/MacPuffin.dmg)** — that link always points at the newest release.
 
-1. Open the image and drag **MacPuffin.app** into Applications.
-2. **Right-click the app → Open**, then confirm. Do this once.
-3. Install Node if you do not have it: `brew install node`.
+1. Open the image and drag **MacPuffin** into Applications.
+2. Double-click it.
+3. The first time only, macOS asks you to confirm: **System Settings → Privacy
+   & Security →** scroll down **→ Open Anyway**.
 
-> **Why right-click → Open?**
-> This build is signed ad-hoc, not with a paid Apple Developer ID, so it is not
-> notarised. A plain double-click on a downloaded, non-notarised app is blocked
-> by Gatekeeper. Right-click → Open is the supported one-time override. If macOS
-> claims the app "is damaged", clear the quarantine flag instead:
+**Nothing else to install.** The app carries its own Node runtime, so there is
+no Homebrew step and no Terminal.
+
+> **Why that one confirmation?**
+> Apple charges developers an annual fee to have their apps notarised, which is
+> what lets an app open without a prompt. MacPuffin is free and unfunded and has
+> not paid it, so macOS asks you to confirm once that you meant to open it. It is
+> not a malware warning.
 >
-> ```bash
-> xattr -dr com.apple.quarantine /Applications/MacPuffin.app
-> ```
+> Note that **right-click → Open no longer works** — Apple removed that shortcut
+> in macOS 15 Sequoia. System Settings is now the only route.
+>
+> A copy you build yourself is never quarantined and opens with no prompt at all.
 
 Verify what you downloaded:
 
 ```bash
 shasum -a 256 -c MacPuffin.dmg.sha256
 ```
+
+### Releasing a signed build
+
+Tagging is all it takes; no maintainer has to build locally. With these three
+repository secrets set, the release job signs, notarises and staples
+automatically, and the DMG opens on a double-click with no prompt:
+
+| Secret | What it is |
+|---|---|
+| `MACOS_CERT_P12` | the **Developer ID Application** certificate and key, exported as `.p12` then base64-encoded |
+| `MACOS_CERT_PASSWORD` | the password set on that export |
+| `MACOS_NOTARY_PROFILE` | the name of a `notarytool` keychain profile stored on the runner |
+
+Without them the release still builds, ad-hoc signed, and users approve it once
+in System Settings. To notarise from a laptop instead:
+
+```bash
+SIGN_IDENTITY="Developer ID Application: Veraplot (TEAMID)" \
+NOTARY_PROFILE="macpuffin" ./make-dmg.sh
+```
+
+`make-dmg.sh` refuses to submit an ad-hoc signed image, because Apple rejects
+those and a silent skip would look like success.
 
 ### Or build it yourself
 
@@ -142,7 +170,7 @@ separate Intel build.
 | **Intel** (2011 – 2020, incl. T2) | ✅ native x86_64 | same binary, no Rosetta |
 | **macOS 11 Big Sur → 26** | ✅ | `LSMinimumSystemVersion` is 11.0 |
 | **macOS 10.15 Catalina and older** | ❌ | below the deployment target |
-| **Node.js 20 / 22 / 24** | ✅ | CI runs the suite on all three |
+| **Node.js** | ✅ bundled | the app ships its own universal runtime; nothing to install |
 | **APFS and HFS+ volumes** | ✅ | sizes come from block counts, not filesystem assumptions |
 | **External / network volumes** | ✅ read | listed in the Storage map; deletion stays home-folder only |
 
@@ -316,6 +344,12 @@ version:
 ### Zero dependencies
 
 No `dependencies`, no `devDependencies`, no `node_modules`, no lockfile.
+
+The app does bundle the **Node runtime itself** — the official universal binary
+from nodejs.org, 203 MB on disk and about 70 MB of the download. That is the
+interpreter, not a dependency: still nothing from npm, and still nothing to
+install. It is what makes MacPuffin a normal Mac app rather than something that
+demands Homebrew before it will start.
 Nothing is fetched from a registry, so there is no supply chain to attack.
 Every import is a Node builtin:
 
@@ -410,6 +444,9 @@ lib/util.js        byte formatting, top-N heap, concurrency pool
 public/            index.html · style.css · app.js   (no build step)
 native/            MacPuffin.swift (window) · mptrash.swift (trash helper)
                    icon.png (master) · icon-prompt.txt · compose-icon.py
+                   social-preview.html (the GitHub card)
+logo.png           the mark, at the repository root
+build-social.sh    renders docs/social-preview.png
 tests/             node:test suites
 build-app.sh       compiles universal Swift binaries, renders the icon, assembles MacPuffin.app
 make-dmg.sh        packages the app into a verified, checksummed DMG
@@ -435,6 +472,19 @@ kept as the third accent. Every colour is a token at the top of
 mark, primary action and progress surfaces, and `--grad-meter` for gauges that
 run blue when there is room and red when there is not. The app re-skins by
 editing that one block.
+
+### The mark
+
+`logo.png` sits at the repository root and is what the README shows. Note that
+GitHub does not read it: unlike GitLab, it has no convention for a logo file in
+the root, so the file is there for mirrors, for tools that look for one, and
+because the README needs a path to point at.
+
+What GitHub does support is a **social preview** — the card shown wherever the
+repository link is shared. `./build-social.sh` renders it to
+`docs/social-preview.png` at 1280×640 and refuses to emit anything over the
+1 MB limit. It is uploaded once, by hand, under
+**Settings → General → Social preview**.
 
 ### The icon
 

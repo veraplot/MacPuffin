@@ -119,7 +119,8 @@ Twenty-three known reclaimable locations, measured with real sizes and file coun
 - An optional update notice. Once per launch the shell asks GitHub whether a newer release exists and, if so, shows a dismissible banner linking to it. The request is anonymous, carries no data about you or your machine, times out after six seconds, and fails silently when offline. Nothing is ever downloaded or installed automatically. Disable it with: defaults write local.macpuffin.app disableUpdateCheck -bool YES
 - Launching it starts the bundled server; quitting stops it. A server already running on the port is reused rather than duplicated.
 - If Node is missing it says so, with the command to install it, instead of showing a blank window.
-- Distributed as a compressed disk image of about 1 MB with an Applications drop target.
+- Self-contained: the app bundles the official universal Node runtime, so there is nothing to install beforehand. No Homebrew, no Terminal, no separate download — drag it to Applications and open it.
+- Distributed as a compressed disk image of about 70 MB with an Applications drop target.
 - Universal binary throughout, and the shell prefers a Node built for the host architecture: on a Mac with both an Intel and a native Homebrew, the native one is chosen so the server never runs under Rosetta. Architectures are read from the Mach-O header, needing no Xcode tools.
 
 ### Under the hood
@@ -148,7 +149,7 @@ Twenty-three known reclaimable locations, measured with real sizes and file coun
 
 ### Known limitations
 
-- The build is signed ad-hoc rather than notarised, so the first launch of a downloaded copy needs right-click then Open.
+- The build is signed ad-hoc rather than notarised, so the first launch of a downloaded copy needs one confirmation in System Settings under Privacy & Security. Apple removed the older right-click then Open shortcut in macOS 15, so System Settings is the only route. A build made from source is never quarantined and opens immediately. The release pipeline is already wired for notarisation and turns it on automatically once a Developer ID certificate is available.
 - Some folders such as Mail storage and Photos internals require Full Disk Access; without it they are silently skipped rather than counted.
 - iCloud Drive is deliberately excluded, because placeholder files would report sizes that are not actually on the disk.
 - Emptying the Trash erases everything in it, not only what MacPuffin put there.

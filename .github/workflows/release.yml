@@ -18,6 +18,14 @@ jobs:
     name: Build and publish the DMG
     runs-on: macos-latest
 
+    # The `secrets` context cannot be read from a step-level `if`, so the values
+    # are mapped to env here and the conditions below test these instead.
+    # Without this every signing step silently skips, and an unsigned build gets
+    # published looking exactly like a signed one.
+    env:
+      HAS_CERT: ${{ secrets.MACOS_CERT_P12 != '' }}
+      HAS_NOTARY: ${{ secrets.MACOS_NOTARY_PROFILE != '' }}
+
     steps:
       - uses: actions/checkout@v4
 
@@ -28,20 +36,87 @@ jobs:
       - name: Run the test suite before shipping anything
         run: npm run test:coverage
 
+      # With the certificate secrets set, the release is signed and notarised
+      # and opens on a double-click. Without them the build still happens,
+      # ad-hoc signed, and users approve it once in System Settings.
+      - name: Import the Developer ID certificate
+        if: env.HAS_CERT == 'true'
+        env:
+          CERT_P12: ${{ secrets.MACOS_CERT_P12 }}
+          CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
+        run: |
+          echo "$CERT_P12" | base64 --decode > /tmp/cert.p12
+          security create-keychain -p actions build.keychain
+          security default-keychain -s build.keychain
+          security unlock-keychain -p actions build.keychain
+          security set-keychain-settings -t 3600 -u build.keychain
+          security import /tmp/cert.p12 -k build.keychain -P "$CERT_PASSWORD" \
+            -T /usr/bin/codesign -T /usr/bin/security
+          security set-key-partition-list -S apple-tool:,apple:,codesign: \
+            -s -k actions build.keychain >/dev/null
+          rm -f /tmp/cert.p12
+
+          IDENTITY=$(security find-identity -v -p codesigning build.keychain \
+            | grep 'Developer ID Application' | head -1 | sed -E 's/.*"(.*)"/\1/')
+          if [ -z "$IDENTITY" ]; then
+            echo "The imported certificate is not a Developer ID Application one."
+            echo "Apple Development certificates cannot be notarised."
+            security find-identity -v -p codesigning build.keychain
+            exit 1
+          fi
+          echo "SIGN_IDENTITY=$IDENTITY" >> "$GITHUB_ENV"
+          echo "signing as: $IDENTITY"
+
+      - name: Store the notary credentials
+        if: env.HAS_NOTARY == 'true'
+        env:
+          APPLE_ID: ${{ secrets.MACOS_NOTARY_APPLE_ID }}
+          TEAM_ID: ${{ secrets.MACOS_NOTARY_TEAM_ID }}
+          APP_PASSWORD: ${{ secrets.MACOS_NOTARY_PASSWORD }}
+          PROFILE: ${{ secrets.MACOS_NOTARY_PROFILE }}
+        run: |
+          xcrun notarytool store-credentials "$PROFILE" \
+            --apple-id "$APPLE_ID" --team-id "$TEAM_ID" --password "$APP_PASSWORD"
+
+      # make-dmg.sh reads SIGN_IDENTITY and NOTARY_PROFILE: it builds the app,
+      # signs every nested binary, packages the image, then submits and staples.
       - name: Build the disk image
+        env:
+          NOTARY_PROFILE: ${{ secrets.MACOS_NOTARY_PROFILE }}
         run: ./make-dmg.sh "$RUNNER_TEMP/dist"
 
-      - name: Verify the packaged app is universal and signed
+      - name: Verify the packaged app is universal, signed and runnable
         run: |
           MNT=$(hdiutil attach "$RUNNER_TEMP/dist/MacPuffin.dmg" -nobrowse -readonly \
                 | tail -1 | sed 's/^.*\(\/Volumes\/.*\)$/\1/')
           echo "mounted at $MNT"
-          ARCHS=$(lipo -archs "$MNT/MacPuffin.app/Contents/MacOS/MacPuffin")
-          echo "architectures: $ARCHS"
-          case "$ARCHS" in *arm64*) ;; *) echo "missing arm64"; exit 1 ;; esac
-          case "$ARCHS" in *x86_64*) ;; *) echo "missing x86_64"; exit 1 ;; esac
-          codesign --verify --strict "$MNT/MacPuffin.app"
+          APP="$MNT/MacPuffin.app"
+
+          for slice in MacOS/MacPuffin Resources/node Resources/mptrash; do
+            ARCHS=$(lipo -archs "$APP/Contents/$slice")
+            echo "$slice: $ARCHS"
+            case "$ARCHS" in *arm64*)  ;; *) echo "missing arm64 in $slice";  exit 1 ;; esac
+            case "$ARCHS" in *x86_64*) ;; *) echo "missing x86_64 in $slice"; exit 1 ;; esac
+          done
+
+          # A runtime that is signed but refuses to start is the failure mode
+          # that actually reaches users.
+          "$APP/Contents/Resources/node" --version
+          codesign --verify --strict "$APP"
           hdiutil detach "$MNT"
+
+      # A release that claims to be signed but is not is worse than an honest
+      # unsigned one, so when a certificate was supplied the image must pass the
+      # very check a user's Mac performs.
+      - name: Prove the image will open without a prompt
+        if: env.HAS_CERT == 'true'
+        run: |
+          MNT=$(hdiutil attach "$RUNNER_TEMP/dist/MacPuffin.dmg" -nobrowse -readonly \
+                | tail -1 | sed 's/^.*\(\/Volumes\/.*\)$/\1/')
+          spctl --assess --type execute --verbose "$MNT/MacPuffin.app"
+          xcrun stapler validate "$MNT/MacPuffin.app"
+          hdiutil detach "$MNT"
+          echo "Gatekeeper accepts it — users see no prompt"
 
       - name: Publish the release
         env:
@@ -57,10 +132,8 @@ jobs:
 
           **[MacPuffin.dmg](https://github.com/veraplot/MacPuffin/releases/latest/download/MacPuffin.dmg)** — universal (Apple Silicon + Intel), macOS 11 or newer.
 
-          Drag it to Applications, then **right-click → Open** the first time: the
-          build is ad-hoc signed, not notarised, so a plain double-click is blocked.
-
-          Requires [Node.js](https://nodejs.org) 20+ (`brew install node`).
+          Drag it to Applications and open it. Everything it needs is inside the
+          app; there is nothing else to install.
 
           Full capability list: [RELEASE_NOTES.md](https://github.com/veraplot/MacPuffin/blob/main/RELEASE_NOTES.md)
 

@@ -62,12 +62,41 @@ else
   echo "--> WARNING: native/icon.png missing, app will use the generic icon"
 fi
 
-# ── 3. Bundle the server ──────────────────────────────────────────────────────
+# ── 3. Bundle the Node runtime ────────────────────────────────────────────────
+# Shipping Node inside the app is what makes it a normal Mac download: the user
+# drags it to Applications and opens it. No Homebrew, no terminal, no install
+# step. It costs about 70 MB compressed, which is the right trade.
+NODE_VERSION="${NODE_VERSION:-v22.23.2}"
+NODE_CACHE="$BUILD/node-cache/$NODE_VERSION"
+NODE_OUT="$APP/Contents/Resources/node"
+
+fetch_node_slice() {                     # $1 = darwin arch name
+  local arch="$1"
+  local dest="$NODE_CACHE/$arch/node"
+  [ -f "$dest" ] && return 0
+  mkdir -p "$NODE_CACHE/$arch"
+  echo "    downloading node $NODE_VERSION ($arch)"
+  curl -fsSL "https://nodejs.org/dist/$NODE_VERSION/node-$NODE_VERSION-darwin-$arch.tar.gz" \
+    | tar xz -C "$NODE_CACHE/$arch" --strip-components=2 "node-$NODE_VERSION-darwin-$arch/bin/node"
+}
+
+echo "--> bundling node $NODE_VERSION"
+fetch_node_slice arm64
+fetch_node_slice x64
+lipo -create "$NODE_CACHE/arm64/node" "$NODE_CACHE/x64/node" -output "$NODE_OUT"
+strip -S "$NODE_OUT" 2>/dev/null || true
+chmod +x "$NODE_OUT"
+NODE_ARCHS="$(lipo -archs "$NODE_OUT")"
+case "$NODE_ARCHS" in *arm64*) ;; *) echo "bundled node has no arm64 slice"; exit 1 ;; esac
+case "$NODE_ARCHS" in *x86_64*) ;; *) echo "bundled node has no x86_64 slice"; exit 1 ;; esac
+echo "    node is universal: $NODE_ARCHS  ($(du -h "$NODE_OUT" | cut -f1))"
+
+# ── 4. Bundle the server ──────────────────────────────────────────────────────
 echo "--> copying server"
 mkdir -p "$APP/Contents/Resources/app"
 cp -R "$SRC/server.js" "$SRC/package.json" "$SRC/lib" "$SRC/public" "$APP/Contents/Resources/app/"
 
-# ── 4. Info.plist ─────────────────────────────────────────────────────────────
+# ── 5. Info.plist ─────────────────────────────────────────────────────────────
 cat > "$APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -94,9 +123,47 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 PLIST
 echo '</plist>' >> "$APP/Contents/Info.plist"
 
-# ── 5. Sign ad-hoc so Gatekeeper and TCC treat it as a stable identity ────────
-echo "--> signing (ad-hoc)"
-codesign --force --deep --sign - "$APP" >/dev/null 2>&1 || echo "    (ad-hoc signing skipped)"
+# ── 6. Sign ───────────────────────────────────────────────────────────────────
+# Nested executables must be signed individually: --deep does not reach binaries
+# in Resources, and lipo plus strip invalidate the signature Node ships with, so
+# an unsigned node is killed on sight by the kernel. Inner code first, then the
+# bundle that contains it.
+#
+# Set SIGN_IDENTITY to a "Developer ID Application: …" identity to produce a
+# build that can be notarised. Without it the build is ad-hoc signed, and the
+# user has to approve it once in System Settings.
+SIGN_IDENTITY="${SIGN_IDENTITY:--}"
+SIGN_ARGS=(--force --sign "$SIGN_IDENTITY")
+
+if [ "$SIGN_IDENTITY" != "-" ]; then
+  # Notarisation requires the hardened runtime; Node needs these relaxations to
+  # keep working under it.
+  cat > "$BUILD/entitlements.plist" <<'ENT'
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>com.apple.security.cs.allow-jit</key><true/>
+  <key>com.apple.security.cs.allow-unsigned-executable-memory</key><true/>
+  <key>com.apple.security.cs.disable-library-validation</key><true/>
+</dict></plist>
+ENT
+  SIGN_ARGS=(--force --timestamp --options runtime
+             --entitlements "$BUILD/entitlements.plist" --sign "$SIGN_IDENTITY")
+fi
+
+echo "--> signing with identity: $SIGN_IDENTITY"
+codesign "${SIGN_ARGS[@]}" "$APP/Contents/Resources/node"
+codesign "${SIGN_ARGS[@]}" "$APP/Contents/Resources/mptrash"
+codesign "${SIGN_ARGS[@]}" "$APP/Contents/MacOS/MacPuffin"
+codesign "${SIGN_ARGS[@]}" "$APP"
+
+# A binary the kernel refuses to run is worse than no binary at all, so prove
+# each one is valid and actually executable before the build is called done.
+codesign --verify --strict "$APP/Contents/Resources/node"
+codesign --verify --strict "$APP"
+BUNDLED_NODE_VERSION="$("$APP/Contents/Resources/node" --version)" || {
+  echo "    the bundled node will not run"; exit 1; }
+echo "    bundled node runs: $BUNDLED_NODE_VERSION"
 
 # Refresh the icon cache so Finder shows the new artwork immediately.
 touch "$APP"

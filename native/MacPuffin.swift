@@ -69,6 +69,14 @@ var hostArchitecture: UInt32 {
 /// native one (/opt/homebrew), picking the Intel binary would run the server
 /// under Rosetta — slower, and squarely in the path of Apple's deprecation.
 func findNode() -> String? {
+    // The copy inside the bundle is the one this app was built and tested
+    // against, and it is always the right architecture. Everything after it is
+    // a fallback for running from a source checkout.
+    if let bundled = Bundle.main.resourceURL?.appendingPathComponent("node").path,
+       FileManager.default.isExecutableFile(atPath: bundled) {
+        return bundled
+    }
+
     var candidates = [
         "/opt/homebrew/bin/node",
         "/usr/local/bin/node",

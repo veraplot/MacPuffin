@@ -81,6 +81,13 @@ jobs:
           case "$ARCHS" in *arm64*)  ;; *) echo "missing arm64 slice";  exit 1 ;; esac
           case "$ARCHS" in *x86_64*) ;; *) echo "missing x86_64 slice"; exit 1 ;; esac
           test -x "$APP/Contents/Resources/mptrash"     || { echo "missing trash helper"; exit 1; }
+          test -x "$APP/Contents/Resources/node"        || { echo "missing bundled node"; exit 1; }
+          NODE_ARCHS=$(lipo -archs "$APP/Contents/Resources/node")
+          echo "bundled node: $NODE_ARCHS"
+          case "$NODE_ARCHS" in *arm64*)  ;; *) echo "node missing arm64";  exit 1 ;; esac
+          case "$NODE_ARCHS" in *x86_64*) ;; *) echo "node missing x86_64"; exit 1 ;; esac
+          # Signed but unrunnable is the failure mode that matters here.
+          "$APP/Contents/Resources/node" --version || { echo "bundled node will not run"; exit 1; }
           test -f "$APP/Contents/Info.plist"            || { echo "missing Info.plist"; exit 1; }
           test -f "$APP/Contents/Resources/app/server.js" || { echo "missing server"; exit 1; }
           codesign --verify --strict "$APP" && echo "signature ok"
@@ -99,6 +106,9 @@ jobs:
           test -d "$MNT/MacPuffin.app"     || { echo "no app in the image"; exit 1; }
           test -L "$MNT/Applications"      || { echo "no Applications drop target"; exit 1; }
           test -f "$MNT/Read me first.txt" || { echo "no readme"; exit 1; }
+          test -x "$MNT/MacPuffin.app/Contents/Resources/node" || { echo "no bundled runtime"; exit 1; }
+          "$MNT/MacPuffin.app/Contents/Resources/node" --version \
+            || { echo "the runtime in the image will not run"; exit 1; }
           ARCHS=$(lipo -archs "$MNT/MacPuffin.app/Contents/MacOS/MacPuffin")
           echo "architectures: $ARCHS"
           case "$ARCHS" in *arm64*)  ;; *) echo "missing arm64";  exit 1 ;; esac

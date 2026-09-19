@@ -37,27 +37,48 @@ ln -s /Applications "$STAGE/Applications"
 
 cat > "$STAGE/Read me first.txt" <<'TXT'
 MacPuffin
-========
+=========
 
-1. Drag MacPuffin.app into the Applications folder.
+INSTALLING
 
-2. The first time you open it, right-click the app and choose "Open", then
-   confirm. macOS shows a warning because this build is signed ad-hoc rather
-   than with a paid Apple Developer ID. A normal double-click will be blocked;
-   right-click -> Open is the one-time way through.
+  1. Drag MacPuffin into the Applications folder, next to this note.
 
-   If macOS says the app "is damaged", the quarantine flag needs clearing:
+  2. Open your Applications folder and double-click MacPuffin.
 
-       xattr -dr com.apple.quarantine /Applications/MacPuffin.app
+  3. The first time only, macOS will say it "cannot be opened because Apple
+     cannot check it for malicious software". This is expected. Click Done,
+     then:
 
-3. MacPuffin needs Node.js 20 or newer:
+        Apple menu  ->  System Settings
+        Privacy & Security
+        scroll to the bottom
+        next to "MacPuffin was blocked", click Open Anyway
 
-       brew install node
+     Enter your password, and MacPuffin opens. You only do this once.
 
-   It will tell you if Node is missing.
+WHY THAT STEP EXISTS
 
-Everything runs on this Mac. The app makes no outbound network connections.
-Source: https://github.com/veraplot/MacPuffin
+  Apple charges a yearly fee to developers so their apps open without this
+  message. MacPuffin is free and has no company behind it, so it has not paid
+  that fee. macOS therefore asks you to confirm, once, that you meant to open
+  it. It is not a virus warning, and nothing is wrong with the download.
+
+  If you would rather not, you can build MacPuffin yourself from the source
+  code - the instructions are on the page below, and a build you make yourself
+  opens with no warning at all.
+
+NOTHING ELSE TO INSTALL
+
+  Everything MacPuffin needs is inside the app. No other downloads, no
+  Terminal, no setup.
+
+WHAT IT DOES WITH YOUR FILES
+
+  It reads them to measure them, and that is all. Nothing is uploaded, and
+  nothing is ever deleted: anything you remove goes to the Trash, where you can
+  put it back. Space is only freed once you empty the Trash.
+
+Source code and help: https://github.com/veraplot/MacPuffin
 TXT
 
 echo "==> Creating $DMG"
@@ -72,6 +93,26 @@ hdiutil create \
 
 rm -rf "$STAGE"
 
+# ── Notarisation ──────────────────────────────────────────────────────────────
+# Apple checks the image and issues a ticket; stapling attaches that ticket so
+# the app opens even on a Mac that is offline. Skipped unless a notary profile
+# is named, and skipped with a warning if the build was only ad-hoc signed,
+# because Apple rejects anything not signed with a Developer ID.
+if [ -n "${NOTARY_PROFILE:-}" ]; then
+  if [ "${SIGN_IDENTITY:--}" = "-" ]; then
+    echo "!!  NOTARY_PROFILE is set but SIGN_IDENTITY is not."
+    echo "!!  Apple only notarises builds signed with a Developer ID Application"
+    echo "!!  certificate; an ad-hoc signature is always rejected. Skipping."
+  else
+    echo "==> Notarising (this usually takes a few minutes)"
+    xcrun notarytool submit "$DMG" --keychain-profile "$NOTARY_PROFILE" --wait
+    xcrun stapler staple "$DMG"
+    xcrun stapler validate "$DMG"
+    echo "    stapled — this image opens on a double-click, even offline"
+  fi
+fi
+
 SIZE="$(du -h "$DMG" | cut -f1 | tr -d ' ')"
 echo "==> Done: $DMG ($SIZE)"
+echo "    self-contained: the Node runtime is inside the app, nothing to install"
 shasum -a 256 "$DMG" | tee "$DMG.sha256"
