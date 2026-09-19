@@ -6,7 +6,9 @@ import os from 'node:os';
 import path from 'node:path';
 
 import { scanJunk, scanApps, homeMap, spotlightLarge } from '../lib/scan.js';
-import { condaEnvs, pyenvVersions, systemPythons } from '../lib/devtools.js';
+import { condaEnvs, pyenvVersions, systemPythons, parseDockerImages, parseDockerReclaimable, scanDocker } from '../lib/devtools.js';
+import { statLargest } from '../lib/scan.js';
+import { reveal } from '../lib/trash.js';
 import { appIcon, isAppBundle, CACHE_DIR } from '../lib/icons.js';
 import { record, list, clear, redact, reportBody, CRASH_FILE } from '../lib/crash.js';
 import { trashPaths } from '../lib/trash.js';
@@ -254,6 +256,162 @@ test('systemPythons reports interpreters on PATH, without duplicates', async () 
     assert.ok(!f.path.includes('/.pyenv/'), 'pyenv shims belong to the pyenv list');
     assert.ok(!f.path.includes('anaconda'), 'conda interpreters belong to the conda list');
   }
+});
+
+// ── Docker output parsing ────────────────────────────────────────────────────
+// Parsed from fixtures rather than a live daemon, so these hold on any machine
+// — including a CI runner with no Docker installed.
+
+const DOCKER_LS = [
+  '{"ID":"a1b2c3d4e5f6","Repository":"nginx","Tag":"latest","Size":"142MB","CreatedSince":"2 days ago"}',
+  '{"ID":"ffeeddccbbaa","Repository":"<none>","Tag":"<none>","Size":"2.04GB","CreatedSince":"3 weeks ago"}',
+  '{"ID":"0123456789ab","Repository":"postgres","Tag":"17.4","Size":"1.5GB","CreatedSince":"1 month ago"}',
+  'WARNING: something unparseable',
+  '',
+].join('\n');
+
+test('parseDockerImages reads the image list, largest first', () => {
+  const images = parseDockerImages(DOCKER_LS);
+  assert.equal(images.length, 3, 'the warning line must be skipped, not fatal');
+  assert.deepEqual(images.map((i) => i.name), [
+    '<untagged> ffeeddccbbaa',
+    'postgres:17.4',
+    'nginx:latest',
+  ]);
+  assert.equal(images[0].dangling, true);
+  assert.equal(images[1].dangling, false);
+  assert.equal(images[2].size, Math.round(142 * 1024 ** 2));
+});
+
+test('parseDockerImages survives empty and malformed input', () => {
+  assert.deepEqual(parseDockerImages(''), []);
+  assert.deepEqual(parseDockerImages(undefined), []);
+  assert.deepEqual(parseDockerImages('not json\n{"no":"id"}'), []);
+});
+
+test('parseDockerReclaimable picks the images row and ignores the rest', () => {
+  const df = [
+    '{"Type":"Local Volumes","Reclaimable":"9GB"}',
+    '{"Type":"Images","Reclaimable":"15.2GB"}',
+    '{"Type":"Build Cache","Reclaimable":"1GB"}',
+  ].join('\n');
+  assert.equal(parseDockerReclaimable(df), Math.round(15.2 * 1024 ** 3));
+  assert.equal(parseDockerReclaimable(''), 0);
+  assert.equal(parseDockerReclaimable('{"Type":"Images"}'), 0, 'no figure means zero');
+});
+
+test('scanDocker says so plainly when Docker is not installed', async () => {
+  const previous = process.env.MACPUFFIN_DOCKER_BIN;
+  process.env.MACPUFFIN_DOCKER_BIN = '/nonexistent/docker';
+  try {
+    const r = await scanDocker();
+    assert.equal(r.available, false);
+    assert.match(r.reason, /not installed/);
+    assert.deepEqual(r.images, []);
+    assert.equal(r.total, 0);
+  } finally {
+    if (previous === undefined) delete process.env.MACPUFFIN_DOCKER_BIN;
+    else process.env.MACPUFFIN_DOCKER_BIN = previous;
+  }
+});
+
+test('scanDocker reads a real image list through the binary it is given', async () => {
+  // A stub standing in for the docker CLI: the same code path runs, on any
+  // machine, whether or not Docker is installed.
+  const stub = path.join(ROOT, 'fake-docker');
+  await fsp.mkdir(ROOT, { recursive: true });
+  await fsp.writeFile(stub, [
+    '#!/bin/sh',
+    'case "$1 $2" in',
+    `  "image ls") cat <<'EOF'`,
+    DOCKER_LS.split('\n').filter(Boolean).join('\n'),
+    'EOF',
+    '  ;;',
+    `  "system df") echo '{"Type":"Images","Reclaimable":"15.2GB"}'`,
+    '  ;;',
+    'esac',
+  ].join('\n'));
+  await fsp.chmod(stub, 0o755);
+
+  const previous = process.env.MACPUFFIN_DOCKER_BIN;
+  process.env.MACPUFFIN_DOCKER_BIN = stub;
+  try {
+    const r = await scanDocker();
+    assert.equal(r.available, true);
+    assert.equal(r.images.length, 3);
+    assert.equal(r.dangling, 1);
+    assert.equal(r.reclaimable, Math.round(15.2 * 1024 ** 3));
+    assert.equal(r.total, r.images.reduce((sum, i) => sum + i.size, 0));
+  } finally {
+    if (previous === undefined) delete process.env.MACPUFFIN_DOCKER_BIN;
+    else process.env.MACPUFFIN_DOCKER_BIN = previous;
+  }
+});
+
+test('scanDocker distinguishes a stopped daemon from an empty machine', async () => {
+  const stub = path.join(ROOT, 'silent-docker');
+  await fsp.writeFile(stub, '#!/bin/sh\nexit 0\n');
+  await fsp.chmod(stub, 0o755);
+
+  const previous = process.env.MACPUFFIN_DOCKER_BIN;
+  process.env.MACPUFFIN_DOCKER_BIN = stub;
+  try {
+    const r = await scanDocker();
+    assert.equal(r.available, false);
+    assert.match(r.reason, /daemon is not running/);
+  } finally {
+    if (previous === undefined) delete process.env.MACPUFFIN_DOCKER_BIN;
+    else process.env.MACPUFFIN_DOCKER_BIN = previous;
+  }
+});
+
+test('scanDocker reports an installed daemon holding no images', async () => {
+  const stub = path.join(ROOT, 'empty-docker');
+  await fsp.writeFile(stub,
+    '#!/bin/sh\ncase "$1 $2" in\n  "image ls") ;;\n  "info --format") echo 27.5.1 ;;\nesac\n');
+  await fsp.chmod(stub, 0o755);
+
+  const previous = process.env.MACPUFFIN_DOCKER_BIN;
+  process.env.MACPUFFIN_DOCKER_BIN = stub;
+  try {
+    const r = await scanDocker();
+    assert.equal(r.available, true);
+    assert.deepEqual(r.images, []);
+    assert.equal(r.total, 0);
+  } finally {
+    if (previous === undefined) delete process.env.MACPUFFIN_DOCKER_BIN;
+    else process.env.MACPUFFIN_DOCKER_BIN = previous;
+  }
+});
+
+// ── Measuring a candidate list ───────────────────────────────────────────────
+
+test('statLargest measures real files and drops what it cannot use', async () => {
+  const big = await put('largest/big.bin', 40960);
+  const small = await put('largest/small.bin', 1024);
+  const gone = path.join(ROOT, 'largest/vanished.bin');
+  const dir = path.join(ROOT, 'largest');
+
+  const out = await statLargest([big, small, gone, dir], 10);
+  assert.deepEqual(out.map((f) => f.name), ['big.bin', 'small.bin'],
+    'a missing path and a directory are both dropped');
+  assert.ok(out[0].size >= out[1].size, 'largest first');
+  assert.ok(out[0].mtime > 0 && out[0].atime > 0);
+});
+
+test('statLargest honours its limit and accepts an empty list', async () => {
+  const files = [await put('lim/a.bin', 2048), await put('lim/b.bin', 4096)];
+  assert.equal((await statLargest(files, 1)).length, 1);
+  assert.deepEqual(await statLargest([], 5), []);
+});
+
+// ── Reveal ───────────────────────────────────────────────────────────────────
+
+test('reveal reports success without opening a window for a missing path', async () => {
+  // A path that cannot exist: `open` fails, nothing appears on screen, and the
+  // call still resolves rather than throwing into a scan.
+  const r = await reveal(path.join(ROOT, 'no-such-file-xyz.txt'));
+  assert.deepEqual(r, { ok: true });
 });
 
 // ── Crash reports ────────────────────────────────────────────────────────────

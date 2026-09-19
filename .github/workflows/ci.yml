@@ -48,6 +48,14 @@ jobs:
         with:
           node-version: '22'
 
+      # Without this the helper is absent, trashPaths silently falls back to
+      # rename(2), and the path every real user takes goes untested.
+      - name: Build the trash helper the tests exercise
+        run: |
+          mkdir -p native/build
+          xcrun swiftc -O -o native/build/mptrash native/mptrash.swift
+          test -x native/build/mptrash && echo "helper built"
+
       - name: Run tests with coverage thresholds
         run: npm run test:coverage
 

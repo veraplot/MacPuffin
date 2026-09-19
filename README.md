@@ -9,7 +9,7 @@ Zero dependencies. No telemetry. Your files never leave the machine.
 
 [![CI](https://github.com/veraplot/MacPuffin/actions/workflows/ci.yml/badge.svg)](https://github.com/veraplot/MacPuffin/actions/workflows/ci.yml)
 [![Coverage](https://img.shields.io/badge/coverage-92%25%20lines-brightgreen?logo=codecov&logoColor=white)](#tests)
-[![Tests](https://img.shields.io/badge/tests-108%20passing-brightgreen?logo=nodedotjs&logoColor=white)](#tests)
+[![Tests](https://img.shields.io/badge/tests-118%20passing-brightgreen?logo=nodedotjs&logoColor=white)](#tests)
 [![Dependencies](https://img.shields.io/badge/dependencies-0-brightgreen?logo=npm&logoColor=white)](#zero-dependencies)
 [![Network](https://img.shields.io/badge/network-update%20check%20only-brightgreen?logo=wireshark&logoColor=white)](SECURITY.md#the-one-external-request)
 
@@ -365,7 +365,7 @@ server is reachable by any process running as your user.
 
 ## Tests
 
-108 tests, no framework — `node:test` from the standard library.
+118 tests, no framework — `node:test` from the standard library.
 
 ```bash
 npm test                # run the suite
@@ -380,8 +380,18 @@ npm run test:coverage   # with coverage thresholds (fails under 70%)
 | `tests/system.test.js` | the real machine: memory split, page-size handling, CPU, process aggregation, volumes, battery |
 | `tests/scanners.test.js` | junk, applications, home map, Spotlight, icon extraction, environment discovery, crash records, bulk and fallback trashing |
 
-Current coverage of `lib/`: **92.0% lines, 76.4% branches, 88.2% functions**. The
+Current coverage of `lib/`: **92.6% lines, 78.0% branches, 88.6% functions**. The
 build fails below 90 / 72 / 85, so coverage cannot quietly rot.
+
+The figures are deliberately **independent of the machine running them**. An
+earlier version scored three points higher here than on CI, because this Mac
+has Docker installed and a populated Spotlight index while a fresh runner has
+neither — so whole branches were being credited locally and never executed in
+CI. Docker output is now parsed by a pure function fed from fixtures, the live
+path is driven by a stub binary, and the file-measuring step is tested on real
+fixture files rather than whatever Spotlight happens to return. CI also builds
+the trash helper before measuring, so the path every user actually takes is the
+path under test.
 
 CI runs the suite on macOS against Node 20, 22 and 24, builds the `.app` and
 the DMG, and verifies the signature on every push. The coverage thresholds run

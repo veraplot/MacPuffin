@@ -142,7 +142,7 @@ Twenty-three known reclaimable locations, measured with real sizes and file coun
 
 ### Verified on this release
 
-- 108 automated tests across unit, filesystem, live-server and real-machine suites; 92.0% line coverage, 76.4% branch coverage and 88.2% function coverage of the library code, enforced by the build.
+- 118 automated tests across unit, filesystem, live-server and real-machine suites; 92.6% line coverage, 78.0% branch coverage and 88.6% function coverage of the library code, enforced by the build and independent of what happens to be installed on the machine running them.
 - Continuous integration runs on macOS against Node 20, 22 and 24, builds the application bundle and the disk image on every push, mounts the image to check what a user would actually receive, verifies the signature and the checksum, and keeps the build available for download for fourteen days.
 - The release pipeline refuses to publish a disk image whose application is missing either the arm64 or the x86_64 slice.
 
