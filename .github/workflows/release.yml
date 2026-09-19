@@ -111,11 +111,31 @@ jobs:
       - name: Prove the image will open without a prompt
         if: env.HAS_CERT == 'true'
         run: |
-          MNT=$(hdiutil attach "$RUNNER_TEMP/dist/MacPuffin.dmg" -nobrowse -readonly \
+          DMG="$RUNNER_TEMP/dist/MacPuffin.dmg"
+
+          # The ticket is stapled to the disk image, which is the thing that
+          # gets downloaded. An app inside a stapled image carries no ticket of
+          # its own, so asking the app about one always fails — the image is
+          # what must be checked.
+          xcrun stapler validate "$DMG"
+
+          MNT=$(hdiutil attach "$DMG" -nobrowse -readonly \
                 | tail -1 | sed 's/^.*\(\/Volumes\/.*\)$/\1/')
-          spctl --assess --type execute --verbose "$MNT/MacPuffin.app"
-          xcrun stapler validate "$MNT/MacPuffin.app"
-          hdiutil detach "$MNT"
+
+          # The verdict that matters: what Gatekeeper says about the app a user
+          # drags out. "accepted" plus "Notarized Developer ID" means no prompt.
+          ASSESS=$(spctl --assess --type execute --verbose "$MNT/MacPuffin.app" 2>&1)
+          echo "$ASSESS"
+          hdiutil detach "$MNT" >/dev/null
+
+          case "$ASSESS" in
+            *"Notarized Developer ID"*) ;;
+            *) echo "not notarised — users would still be prompted"; exit 1 ;;
+          esac
+          case "$ASSESS" in
+            *accepted*) ;;
+            *) echo "Gatekeeper rejected the app"; exit 1 ;;
+          esac
           echo "Gatekeeper accepts it — users see no prompt"
 
       - name: Publish the release
