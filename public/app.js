@@ -176,9 +176,7 @@ async function tickSystem() {
     $('#side-disk-fill').parentElement.classList.toggle('hot', pct > 0.9);
     $('#side-disk-text').textContent = `${fmtBytes(disk.free)} free`;
 
-    const CIRC = 2 * Math.PI * 92;
-    $('#disk-ring').style.strokeDasharray = CIRC;
-    $('#disk-ring').style.strokeDashoffset = CIRC * (1 - pct);
+    $('#disk-meter').style.width = `${(1 - pct) * 100}%`;   // the span masks the free remainder
     $('#disk-free').textContent = fmtBytes(disk.free);
     $('#disk-total').textContent = fmtBytes(disk.total);
     $('#hero-eyebrow').textContent = `Startup disk · ${Math.round(pct * 100)}% used`;
@@ -235,12 +233,14 @@ function renderProcs(procs) {
       </div>`).join('');
 }
 
+// Four steps of one ramp plus an empty track: the split is read by position,
+// not by hue, so no part needs a colour of its own.
 const MEM_PARTS = [
-  ['app', 'App memory', '#ef4444'],
-  ['wired', 'Wired', '#dc2626'],
-  ['compressed', 'Compressed', '#f59e0b'],
-  ['cached', 'Cached files', '#3b82f6'],
-  ['free', 'Free', 'rgba(255,255,255,0.12)'],
+  ['app', 'App memory', '#f5a524'],
+  ['wired', 'Wired', '#b8791b'],
+  ['compressed', 'Compressed', '#7c5413'],
+  ['cached', 'Cached files', '#3f3f46'],
+  ['free', 'Free', '#232327'],
 ];
 
 function renderPerf(mem, cpu) {
@@ -275,7 +275,7 @@ function renderVolumes() {
   $('#volumes').innerHTML = state.sys.volumes
     .map((v) => `<div class="vol">
       <div class="vol-head"><b>${esc(v.mount)}</b><span>${fmtBytes(v.used)} used · ${fmtBytes(v.free)} free · ${fmtBytes(v.total)} total</span></div>
-      <div class="bar"><span style="width:${v.percent * 100}%;${v.percent > 0.9 ? 'background:linear-gradient(90deg,#dc2626,#ef4444)' : ''}"></span></div>
+      <div class="meter" style="margin:0"><span style="width:${(1 - v.percent) * 100}%"></span></div>
     </div>`)
     .join('');
 }
@@ -442,7 +442,7 @@ function renderApps() {
   syncSelection('apps');
 }
 
-const FOLDER_COLORS = ['#ef4444', '#3b82f6', '#f59e0b', '#0ea5e9', '#dc2626', '#93c5fd', '#fbbf24', '#a8a29e'];
+const FOLDER_COLORS = ['#f5a524', '#d18f20', '#ad791c', '#8a6318', '#6b4e15', '#4f3b12', '#3a2d10', '#2b230e'];
 
 function barBlock(items, total, label = (i) => i.name) {
   if (!items.length) return '<p class="empty">Nothing to show.</p>';
@@ -489,16 +489,58 @@ function renderDeepSummary() {
     `${d.files.toLocaleString()} files · ${fmtBytes(d.totalBytes)} scanned in ${(d.elapsed / 1000).toFixed(1)}s` +
     (d.partial ? ' before you stopped it — the results below cover only what was reached. ' : '. ') +
     `${fmtBytes(d.oldBytes + wasted)} looks reclaimable from old files and duplicates.` +
-    (d.skippedCount ? ` ${d.skippedCount.toLocaleString()} cache and dependency folders were skipped — see Cleanup.` : '');
+    (d.skippedCount ? ` ${d.skippedCount.toLocaleString()} cache and dependency folders were skipped — see Cleanup.` : '')
+    + (d.deniedCount
+      ? ` ${d.deniedCount.toLocaleString()} folder${d.deniedCount > 1 ? 's' : ''} could not be read, so the total is lower than reality`
+        + ' — allow MacPuffin under System Settings › Privacy & Security › Files and Folders.'
+      : '');
 }
 
 /* ── Scans ──────────────────────────────────────────────────── */
 
+/** What each scan is called while it runs, and whether it can be stopped. */
+const SCAN_LABEL = {
+  deep: 'Scanning your home folder',
+  junk: 'Measuring reclaimable locations',
+  apps: 'Measuring applications',
+  home: 'Mapping the home folder',
+  devtools: 'Measuring developer tools',
+  spot: 'Asking Spotlight',
+};
+
 function setScanning(key, on) {
   if (on) state.scanning.add(key); else state.scanning.delete(key);
-  $$('[data-scan]').forEach((b) => { b.disabled = state.scanning.size > 0; });
-  $('#btn-scan-all').disabled = state.scanning.size > 0;
-  $('#btn-scan-all').textContent = state.scanning.size ? 'Scanning…' : 'Scan this Mac';
+  const running = state.scanning.size > 0;
+
+  $$('[data-scan]').forEach((b) => { b.disabled = running; });
+  $('#btn-scan-all').disabled = running;
+  $('#btn-scan-all').textContent = running ? 'Scanning…' : 'Scan this Mac';
+
+  // The strip lives in the shell, not in a view, so progress stays visible
+  // when you switch screens mid-scan.
+  const strip = $('#scanstrip');
+  strip.hidden = !running;
+  if (!running) {
+    $('#scan-count').textContent = '';
+    $('#scan-path').textContent = '';
+    $('#scan-bar').style.width = '';
+    $('#scan-bar-wrap').classList.add('indet');
+    return;
+  }
+  const current = [...state.scanning][0];
+  strip.dataset.key = current;
+  $('#scan-label').textContent = SCAN_LABEL[current] || 'Scanning';
+  $('#btn-stop').hidden = !['deep', 'junk', 'apps', 'home', 'devtools'].includes(current);
+}
+
+/** Report progress into the one strip. */
+function scanProgress({ files, bytes, current }) {
+  if (files !== undefined) {
+    $('#scan-count').textContent = `${files.toLocaleString()} files · ${fmtBytes(bytes || 0)}`;
+    $('#scan-bar-wrap').classList.remove('indet');
+    $('#scan-bar').style.width = `${Math.min((files / 400000) * 100, 96)}%`;
+  }
+  if (current) $('#scan-path').textContent = shortPath(current);
 }
 
 let deepStream = null;
@@ -508,23 +550,14 @@ function runDeep() {
   const minLarge = Math.min(Number($('#large-min').value), 100);
   const thorough = $('#deep-thorough').checked ? 1 : 0;
   setScanning('deep', true);
-  $('#deep-scanbar').hidden = false;
-  $('#hero-progress').hidden = false;
   $('#hero-headline').textContent = 'Scanning your home folder…';
 
   deepStream = stream(`/api/scan/deep?days=${days}&minLarge=${minLarge}&thorough=${thorough}`, {
-    onProgress: (p) => {
-      const line = `${p.files.toLocaleString()} files · ${fmtBytes(p.bytes)} · ${shortPath(p.current)}`;
-      $('#deep-scan-text').textContent = line;
-      $('#hero-progress-text').textContent = line;
-      $('#hero-bar').style.width = `${Math.min((p.files / 400000) * 100, 96)}%`;
-    },
+    onProgress: scanProgress,
     onDone: (data) => {
       state.deep = data;
       state.spotlight = null;
       setScanning('deep', false);
-      $('#deep-scanbar').hidden = true;
-      $('#hero-progress').hidden = true;
       renderLarge(); renderOld(); renderDupes(); renderCategories(); renderDeepSummary();
       toast(
         data.partial
@@ -535,8 +568,6 @@ function runDeep() {
     },
     onError: (msg) => {
       setScanning('deep', false);
-      $('#deep-scanbar').hidden = true;
-      $('#hero-progress').hidden = true;
       toast(msg, 'err');
     },
   });
@@ -544,16 +575,13 @@ function runDeep() {
 
 function runSse(key, url, onDone, onPartial) {
   setScanning(key, true);
-  const bar = $(`#${key}-scanbar`);
-  if (bar) bar.hidden = false;
   stream(url, {
     onProgress: (p) => {
-      const t = $(`#${key}-scan-text`);
-      if (t) t.textContent = shortPath(p.current || '');
+      scanProgress(p);
       if (p.item) onPartial?.(p.item);
     },
-    onDone: (data) => { setScanning(key, false); if (bar) bar.hidden = true; onDone(data); },
-    onError: (msg) => { setScanning(key, false); if (bar) bar.hidden = true; toast(msg, 'err'); },
+    onDone: (data) => { setScanning(key, false); onDone(data); },
+    onError: (msg) => { setScanning(key, false); toast(msg, 'err'); },
   });
 }
 
@@ -875,21 +903,20 @@ $('#btn-reveal-trash').addEventListener('click', () => post('/api/reveal', { pat
 
 $('#btn-stop').addEventListener('click', async () => {
   const btn = $('#btn-stop');
+  const key = $('#scanstrip').dataset.key || 'deep';
   btn.disabled = true;
   btn.textContent = 'Stopping…';
   try {
     // The stream stays open on purpose: the server finishes the walk early and
     // still sends its results, so a stopped scan is a usable scan.
-    await post('/api/scan/stop', { key: 'deep' });
+    await post('/api/scan/stop', { key });
   } catch {
     // Already finished between the click and the request — nothing to stop.
     deepStream?.close();
-    setScanning('deep', false);
-    $('#deep-scanbar').hidden = true;
-    $('#hero-progress').hidden = true;
+    setScanning(key, false);
   } finally {
     btn.disabled = false;
-    btn.textContent = 'Stop scan';
+    btn.textContent = 'Stop';
   }
 });
 

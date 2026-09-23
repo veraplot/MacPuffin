@@ -9,6 +9,11 @@ on:
 
 # The whole product is macOS-specific: it parses df / vm_stat / ps output and
 # moves files to ~/.Trash, so the tests only mean anything on a real macOS box.
+# Nothing here writes to the repository; a token that cannot write is one that
+# cannot be abused by a pull request from a fork.
+permissions:
+  contents: read
+
 jobs:
   test:
     name: Tests · Node ${{ matrix.node }}

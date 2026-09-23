@@ -28,10 +28,7 @@
   <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></symbol>
   <symbol id="i-cpu" viewBox="0 0 24 24"><rect width="16" height="16" x="4" y="4" rx="2"/><rect width="6" height="6" x="9" y="9" rx="1"/><path d="M15 2v2"/><path d="M15 20v2"/><path d="M2 15h2"/><path d="M2 9h2"/><path d="M20 15h2"/><path d="M20 9h2"/><path d="M9 2v2"/><path d="M9 20v2"/></symbol>
 </svg>
-<div class="aurora" aria-hidden="true">
-  <span class="blob b1"></span><span class="blob b2"></span><span class="blob b3"></span>
-  <span class="grain"></span>
-</div>
+
 
 <div class="app">
   <aside class="sidebar">
@@ -83,6 +80,17 @@
       </div>
     </header>
 
+    <div class="scanstrip" id="scanstrip" hidden>
+      <div class="scanstrip-top">
+        <b id="scan-label">Scanning</b>
+        <span id="scan-count"></span>
+        <span class="spacer"></span>
+        <button class="btn btn-tiny" id="btn-stop">Stop</button>
+      </div>
+      <div class="bar" id="scan-bar-wrap"><span id="scan-bar"></span></div>
+      <p id="scan-path"></p>
+    </div>
+
     <div class="banner banner-crash" id="crash-banner" hidden>
       <svg class="banner-ic"><use href="#i-bug"/></svg>
       <div class="banner-copy">
@@ -117,73 +125,49 @@
     <!-- ── COCKPIT ───────────────────────────────────────────── -->
     <section class="view is-active" id="view-cockpit">
       <div class="hero">
-        <div class="hero-gauge">
-          <svg viewBox="0 0 220 220" class="ring">
-            <defs>
-              <linearGradient id="gradDisk" x1="0" y1="0" x2="1" y2="1">
-                <stop offset="0%" stop-color="#3b82f6" /><stop offset="50%" stop-color="#f59e0b" /><stop offset="100%" stop-color="#ef4444" />
-              </linearGradient>
-            </defs>
-            <circle class="ring-track" cx="110" cy="110" r="92" />
-            <circle class="ring-fill" id="disk-ring" cx="110" cy="110" r="92" stroke="url(#gradDisk)" />
-          </svg>
-          <div class="hero-gauge-label">
-            <b id="disk-free">—</b>
-            <span>free of <i id="disk-total">—</i></span>
+        <div class="hero-top">
+          <div>
+            <p class="eyebrow" id="hero-eyebrow">Startup disk</p>
+            <div class="hero-figure"><b id="disk-free">—</b><span>free of <i id="disk-total" style="font-style:normal">—</i></span></div>
           </div>
-        </div>
-        <div class="hero-copy">
-          <p class="eyebrow" id="hero-eyebrow">Startup disk</p>
-          <h2 id="hero-headline">Reading your Mac…</h2>
-          <p class="hero-note" id="hero-note">Run a scan to see what is eating the disk.</p>
           <div class="hero-actions">
             <button class="btn btn-primary" id="btn-scan-all">Scan this Mac</button>
-            <button class="btn btn-ghost" id="btn-open-storage">Storage map</button>
-          </div>
-          <div class="hero-progress" id="hero-progress" hidden>
-            <div class="bar"><span id="hero-bar"></span></div>
-            <p id="hero-progress-text">Starting…</p>
-            <button class="btn btn-ghost btn-tiny" id="btn-stop">Stop scan</button>
+            <button class="btn" id="btn-open-storage">Storage map</button>
           </div>
         </div>
+
+        <div class="meter"><span id="disk-meter"></span></div>
+
+        <p class="hero-headline" id="hero-headline">Reading this Mac…</p>
+        <p class="hero-note" id="hero-note">Run a scan to see what is using the disk.</p>
+
+
       </div>
 
-      <div class="grid cards">
-        <button class="card gem-clean" data-goto="cleanup">
-          <span class="gem"></span>
-          <h3><svg class="ic card-ic"><use href="#i-sparkles"/></svg>Cleanup</h3>
-          <b class="card-value" id="c-junk">—</b>
-          <p class="card-note" id="c-junk-note">Caches, logs, build leftovers</p>
+      <div class="strip">
+        <button class="strip-cell" data-goto="cleanup">
+          <h3><svg class="card-ic"><use href="#i-sparkles"/></svg>Cleanup</h3>
+          <b class="card-value" id="c-junk">—</b><p class="card-note" id="c-junk-note">caches, logs, build leftovers</p>
         </button>
-        <button class="card gem-large" data-goto="large">
-          <span class="gem"></span>
-          <h3><svg class="ic card-ic"><use href="#i-harddrive"/></svg>Large files</h3>
-          <b class="card-value" id="c-large">—</b>
-          <p class="card-note" id="c-large-note">Biggest single files</p>
+        <button class="strip-cell" data-goto="large">
+          <h3><svg class="card-ic"><use href="#i-harddrive"/></svg>Large files</h3>
+          <b class="card-value" id="c-large">—</b><p class="card-note" id="c-large-note">biggest single files</p>
         </button>
-        <button class="card gem-old" data-goto="old">
-          <span class="gem"></span>
-          <h3><svg class="ic card-ic"><use href="#i-history"/></svg>Old files</h3>
-          <b class="card-value" id="c-old">—</b>
-          <p class="card-note" id="c-old-note">Untouched for months</p>
+        <button class="strip-cell" data-goto="old">
+          <h3><svg class="card-ic"><use href="#i-history"/></svg>Old files</h3>
+          <b class="card-value" id="c-old">—</b><p class="card-note" id="c-old-note">untouched for months</p>
         </button>
-        <button class="card gem-dupe" data-goto="dupes">
-          <span class="gem"></span>
-          <h3><svg class="ic card-ic"><use href="#i-copy"/></svg>Duplicates</h3>
-          <b class="card-value" id="c-dupe">—</b>
-          <p class="card-note" id="c-dupe-note">Same file, many copies</p>
+        <button class="strip-cell" data-goto="dupes">
+          <h3><svg class="card-ic"><use href="#i-copy"/></svg>Duplicates</h3>
+          <b class="card-value" id="c-dupe">—</b><p class="card-note" id="c-dupe-note">same file, many copies</p>
         </button>
-        <button class="card gem-apps" data-goto="apps">
-          <span class="gem"></span>
-          <h3><svg class="ic card-ic"><use href="#i-grid"/></svg>Applications</h3>
-          <b class="card-value" id="c-apps">—</b>
-          <p class="card-note" id="c-apps-note">Installed app weight</p>
+        <button class="strip-cell" data-goto="apps">
+          <h3><svg class="card-ic"><use href="#i-grid"/></svg>Applications</h3>
+          <b class="card-value" id="c-apps">—</b><p class="card-note" id="c-apps-note">installed app weight</p>
         </button>
-        <button class="card gem-perf" data-goto="perf">
-          <span class="gem"></span>
-          <h3><svg class="ic card-ic"><use href="#i-cpu"/></svg>Memory</h3>
-          <b class="card-value" id="c-mem">—</b>
-          <p class="card-note" id="c-mem-note">Live pressure</p>
+        <button class="strip-cell" data-goto="perf">
+          <h3><svg class="card-ic"><use href="#i-ram"/></svg>Memory</h3>
+          <b class="card-value" id="c-mem">—</b><p class="card-note" id="c-mem-note">live pressure</p>
         </button>
       </div>
 
@@ -207,7 +191,6 @@
         <span class="spacer"></span>
         <button class="btn btn-danger" data-action="trash-selected" data-scope="junk" disabled>Move selection to Trash</button>
       </div>
-      <div class="scanbar" id="junk-scanbar" hidden><div class="bar indet"><span></span></div><p id="junk-scan-text"></p></div>
       <div class="panel flush"><div class="table" id="junk-table"><p class="empty">Scan to list reclaimable caches, logs and build leftovers.</p></div></div>
     </section>
 
@@ -224,7 +207,6 @@
         <span class="spacer"></span>
         <button class="btn btn-danger" data-action="trash-selected" data-scope="large" disabled>Move selection to Trash</button>
       </div>
-      <div class="scanbar" id="deep-scanbar" hidden><div class="bar indet"><span></span></div><p id="deep-scan-text"></p></div>
       <div class="panel flush"><div class="table" id="large-table"><p class="empty">Deep scan walks your home folder. Spotlight is instant but only sees indexed files.</p></div></div>
     </section>
 
@@ -262,7 +244,6 @@
         <span class="spacer"></span>
         <button class="btn btn-danger" data-action="trash-selected" data-scope="apps" disabled>Move selection to Trash</button>
       </div>
-      <div class="scanbar" id="apps-scanbar" hidden><div class="bar indet"><span></span></div><p id="apps-scan-text"></p></div>
       <div class="panel flush"><div class="table" id="apps-table"><p class="empty">Lists every app in /Applications with its size and last-used date.</p></div></div>
     </section>
 
@@ -272,7 +253,6 @@
         <button class="btn btn-primary" data-scan="home">Map home folder</button>
         <span class="toolbar-stat" id="home-stat">Not mapped yet</span>
       </div>
-      <div class="scanbar" id="home-scanbar" hidden><div class="bar indet"><span></span></div><p id="home-scan-text"></p></div>
 
       <div class="panel">
         <div class="panel-head"><h3>Volumes</h3></div>
@@ -297,16 +277,15 @@
         <button class="btn btn-primary" data-scan="devtools">Scan developer tools</button>
         <span class="toolbar-stat" id="dev-stat">Not scanned yet</span>
       </div>
-      <div class="scanbar" id="devtools-scanbar" hidden><div class="bar indet"><span></span></div><p id="devtools-scan-text"></p></div>
 
-      <div class="grid cards dev-cards">
-        <div class="card gem-clean"><span class="gem"></span>
+      <div class="strip">
+        <div class="strip-cell" style="cursor:default">
           <h3><svg class="ic card-ic"><use href="#i-braces"/></svg>Python environments</h3>
           <b class="card-value" id="c-py">—</b><p class="card-note" id="c-py-note">venv · conda · pyenv</p></div>
-        <div class="card gem-apps"><span class="gem"></span>
+        <div class="strip-cell" style="cursor:default">
           <h3><svg class="ic card-ic"><use href="#i-folder"/></svg>node_modules</h3>
           <b class="card-value" id="c-nm">—</b><p class="card-note" id="c-nm-note">per project, plus shared stores</p></div>
-        <div class="card gem-large"><span class="gem"></span>
+        <div class="strip-cell" style="cursor:default">
           <h3><svg class="ic card-ic"><use href="#i-layers"/></svg>Docker images</h3>
           <b class="card-value" id="c-dk">—</b><p class="card-note" id="c-dk-note">local image store</p></div>
       </div>

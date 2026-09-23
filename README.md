@@ -233,6 +233,9 @@ Biggest single files, threshold from 100 MB to 5 GB. Two engines: a deep walk
 of the home folder, or a near-instant Spotlight query for what is indexed.
 
 ### Old files
+
+<img src="docs/old.png" width="820" alt="Old files view" />
+
 Files over 10 MB not opened or modified in 90 days to 2 years, using
 `max(mtime, atime)` as the last-used date.
 
@@ -243,12 +246,21 @@ Grouped by size, then confirmed with an MD5 fingerprint of the first and last
 64 KB. Newest copy is marked; one click selects every redundant copy.
 
 ### Applications
+
+<img src="docs/apps.png" width="820" alt="Applications view" />
+
 Every app in `/Applications` with its size, version, and genuine last-used date
-from Spotlight — not the file's `atime`.
+from Spotlight — not the file's `atime`. Every row carries the bundle's real
+icon, read from the application itself.
 
 ### Storage map
+
+<img src="docs/storage.png" width="820" alt="Storage map view" />
+
 Every mounted volume plus a home-folder breakdown that fills in progressively
-as each folder is measured.
+as each folder is measured. Each volume carries a meter whose colour is
+positional, so a nearly-full disk reads red at a glance while a mostly-empty one
+stays blue.
 
 ### Developer tools
 

@@ -244,3 +244,19 @@ test('log lines carry a timestamp, a level and structured detail', async () => {
   const line = tail(1)[0];
   assert.match(line, /^\d{4}-\d{2}-\d{2}T[\d:.]+Z WARN {2}test\.shape \{"n":1\}$/);
 });
+
+// ── Published assets ─────────────────────────────────────────────────────────
+
+test('no shipped file mentions a client, project or person from the author machine', () => {
+  // Screenshots and docs go out publicly. Real folder names from a working Mac
+  // carry client and project names, so they must never reach the repository.
+  const forbidden = /HIP-DATALAKE|ARKEMA|MyCareer|Safety_Obs|OPENCLASSROOMS|SNPDM|NASPROJECTS|jems-group/i;
+  const root = new URL('..', import.meta.url).pathname;
+  const check = (rel) => {
+    const full = path.join(root, rel);
+    if (!fs.existsSync(full)) return;
+    const text = fs.readFileSync(full, 'utf8');
+    assert.ok(!forbidden.test(text), `${rel} names something private`);
+  };
+  for (const f of ['README.md', 'RELEASE_NOTES.md', 'SECURITY.md', 'CONTRIBUTING.md', 'DESIGN.md']) check(f);
+});
