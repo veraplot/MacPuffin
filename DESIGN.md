@@ -58,10 +58,13 @@ Three consequences, applied throughout:
 
 - **One accent.** `--accent` appears at most twice per screen. If a third use
   appears, one of them is decoration — remove it.
-- **The brand gradient appears exactly twice, and always in the same two
-  places:** the primary action of a view, and the active navigation marker. It
-  is the app's signature against a black ground, so it must stay rare enough to
-  be recognised. A third use makes it wallpaper.
+- **The brand gradient marks the user's own decisions, nowhere else.** Three
+  sanctioned places, and no fourth: the primary action of a view, the active
+  navigation marker, and a checked selection box. What they share is authorship
+  — each one is something the person did, as opposed to something the app
+  noticed, which is `--accent`'s job. It is the app's signature against a black
+  ground, so it must stay rare enough to be recognised; a fourth use makes it
+  wallpaper.
 - **Red and blue also work as a scale, inside meters**, where blue→amber→red
   carries meaning: space free → filling → critical. That is a separate job from
   the identity gradient and the two must not be confused.

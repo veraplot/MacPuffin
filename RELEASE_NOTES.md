@@ -4,6 +4,64 @@ All notable changes to MacPuffin. Newest first.
 
 ---
 
+## v1.0.1 — 2026-09-23
+
+Everything the first release got wrong about being interrupted, plus the
+interface rebuilt around the numbers instead of around a grid of boxes.
+
+### Pause and resume
+
+A scan can now be held where it stands instead of only being abandoned.
+
+- **Pause** stops the walk at its current position without discarding anything. Every count, every collector and every list stays exactly as it was; **Resume** carries on from the same directory rather than starting over.
+- Pausing shows what has been found so far. The large files, stale files, category breakdown and folder breakdown all appear at the moment you pause, so a pause is a way of reading a long scan early rather than a way of interrupting it blindly.
+- Duplicates are the one exception, and they say so: a duplicate group has no meaning until the whole walk has been compared, so a paused scan reports none rather than reporting a wrong number.
+- The progress strip states that it is paused, stops advancing, and keeps the path it stopped on visible as the resume point.
+- **Stop** still works on a paused scan. A held walk is woken and abandoned, so a pause is never a state you have to quit the app to get out of.
+- The hold reaches inside the slow parts too. Measuring one enormous folder used to be uninterruptible for minutes at a time, which made Pause look broken on the Cleanup, Applications and Storage views; the folder measurement now honours the same control.
+- Closing the window during a pause releases the held walk instead of leaving it parked on a file handle.
+
+### Folders macOS would not let us read
+
+- Unreadable folders are now counted and reported instead of being treated as empty. Previously a folder the system refused was indistinguishable from a folder with nothing in it, so a Mac where the Desktop or Documents permission prompt had been declined reported a total that was quietly too low, with no indication anything was missing.
+- The summary names how many folders were refused and points at System Settings › Privacy & Security › Files and Folders. A measurement that cannot see everything now says so rather than understating the result.
+
+### Interface
+
+Rebuilt against a written design system — `DESIGN.md` is the contract, and every
+colour, size and spacing value in the stylesheet traces to a token named there.
+
+- The grid of nine near-identical cards is gone. Summary figures now live in one dense strip whose cells are sized by importance, and each view has a single primary element instead of nine competing ones.
+- One type scale of seven steps replaces the fifteen ad-hoc font sizes the first release accumulated. Every figure is tabular, so columns of numbers align on the digit.
+- Depth comes from value steps and a single hairline rather than from shadows and glows.
+- The red-and-blue identity gradient is used in exactly three places, all of them things you did rather than things the app noticed: the primary action of a view, the active navigation marker, and a checked selection box. Selection ticks previously used the amber attention colour, which conflated your choices with the app's warnings.
+- The disk meter carries blue → amber → red as a scale on its track, so the colour describes how full the disk is rather than decorating the bar.
+- The progress strip lives in the shell rather than inside a view, so a scan started on one screen stays visible when you move to another — which is exactly when you go looking for it. Previously the Duplicates screen showed no progress at all while its own scan was running.
+
+### Update notices
+
+- The update banner now offers three distinct choices rather than one ambiguous "Later": close it to be reminded next launch, **Skip this one** to never hear about that particular version again, or **Never** to stop announcing versions altogether.
+- **Never** is reversible. *Check for Updates…* in the MacPuffin menu clears every dismissal and asks again, so muting the notice is not a dead end.
+- The banner names both versions and says the download opens in your browser, that nothing installs itself, and that your settings survive installing over the existing copy.
+
+### Reliability
+
+- A stale or unrelated program holding MacPuffin's port no longer breaks the app. A server already running is reused only after it reports this exact version and proves it can serve the interface; anything else is stepped over and the next free port is used, and if all ten preferred ports are taken the app asks the system for any free port rather than refusing to open. This is the cause of the `{"error":"not found"}` screen some 1.0.0 downloads showed.
+
+### Verified on this release
+
+- 142 automated tests across unit, filesystem, live-server and real-machine suites; 92.8% line coverage, 79.3% branch coverage and 89.7% function coverage of the library code, enforced by the build and independent of what happens to be installed on the machine running them.
+- Pause and resume are covered by 19 tests of the control itself and 4 against a live server: that a held walk does not advance, that resuming continues the same walk rather than restarting it, that stopping a paused scan keeps exactly what the pause was showing, and that both routes refuse a request without the anti-CSRF header.
+- Continuous integration runs with a read-only token, and now refuses to adopt a server it did not start — a leftover process answering on the test port used to make every later assertion meaningless.
+
+### Known limitations
+
+- The storage map draws proportional bars rather than a treemap.
+- The window paints opaque surfaces; only the title bar carries the platform's translucent material.
+- Light mode is not built.
+
+---
+
 ## v1.0.0 — 2026-09-19
 
 First public release. A local-only cockpit for macOS: it measures where the
@@ -118,9 +176,8 @@ Twenty-three known reclaimable locations, measured with real sizes and file coun
 - A native Cocoa window wrapping a WKWebView — real dock icon, resizing, full screen, and a menu bar with reload and quit.
 - An optional update notice. Once per launch the shell asks GitHub whether a newer release exists and, if so, shows a dismissible banner linking to it. The request is anonymous, carries no data about you or your machine, times out after six seconds, and fails silently when offline. Nothing is ever downloaded or installed automatically. Disable it with: defaults write local.macpuffin.app disableUpdateCheck -bool YES
 - Launching it starts the bundled server; quitting stops it. A server already running on the port is reused rather than duplicated.
-- If a MacPuffin server is already running it is reused rather than started twice, but only after it reports this exact version and proves it can serve the interface. Anything else holding the port — a stale instance, or an unrelated program — is stepped over and the next free port is used. If all ten preferred ports are taken the app asks the system for any free port instead of refusing to open, so no combination of other software can lock it out.
 - Self-contained: the app bundles the official universal Node runtime, so there is nothing to install beforehand. No Homebrew, no Terminal, no separate download — drag it to Applications and open it.
-- Distributed as a compressed disk image of about 70 MB with an Applications drop target.
+- Distributed as a compressed disk image of about 80 MB with an Applications drop target.
 - Universal binary throughout, and the shell prefers a Node built for the host architecture: on a Mac with both an Intel and a native Homebrew, the native one is chosen so the server never runs under Rosetta. Architectures are read from the Mach-O header, needing no Xcode tools.
 
 ### Under the hood
@@ -149,8 +206,7 @@ Twenty-three known reclaimable locations, measured with real sizes and file coun
 
 ### Known limitations
 
-- The build is signed ad-hoc rather than notarised, so the first launch of a downloaded copy needs one confirmation in System Settings under Privacy & Security. Apple removed the older right-click then Open shortcut in macOS 15, so System Settings is the only route. A build made from source is never quarantined and opens immediately. The release pipeline is already wired for notarisation and turns it on automatically once a Developer ID certificate is available.
-- Some folders such as Mail storage and Photos internals require Full Disk Access; without it they are silently skipped rather than counted.
+- Some folders such as Mail storage and Photos internals require Full Disk Access; without it they are skipped without being counted. (Fixed in 1.0.1, which reports them.)
 - iCloud Drive is deliberately excluded, because placeholder files would report sizes that are not actually on the disk.
 - Emptying the Trash erases everything in it, not only what MacPuffin put there.
 - The Intel slice is built and verified in continuous integration but has not yet been run on physical Intel hardware.

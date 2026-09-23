@@ -18,6 +18,7 @@ const state = {
   cpuHistory: new Array(60).fill(0),
   sel: { large: new Set(), old: new Set(), dupes: new Set(), junk: new Set(), apps: new Set() },
   scanning: new Set(),
+  paused: new Set(),
   // What this session has moved to the Trash. The server cannot measure a
   // directory cheaply, so we carry the size the scan already knows.
   trashed: { items: 0, bytes: 0 },
@@ -119,9 +120,13 @@ async function post(path, body) {
 }
 
 /** Run a server-side scan over SSE, forwarding progress ticks. */
-function stream(url, { onProgress, onDone, onError }) {
+function stream(url, { onProgress, onDone, onError, onPaused, onResumed }) {
   const es = new EventSource(url);
   es.addEventListener('progress', (e) => onProgress?.(JSON.parse(e.data)));
+  // The stream deliberately stays open across a pause: it is the same scan,
+  // held in place, and closing it would make Resume impossible.
+  es.addEventListener('paused', (e) => onPaused?.(JSON.parse(e.data)));
+  es.addEventListener('resumed', (e) => onResumed?.(JSON.parse(e.data)));
   es.addEventListener('done', (e) => { es.close(); onDone?.(JSON.parse(e.data)); });
   es.addEventListener('error', (e) => {
     es.close();
@@ -496,6 +501,8 @@ function renderDeepSummary() {
       : '');
 }
 
+const REPO = 'https://github.com/veraplot/MacPuffin';
+
 /* ── Scans ──────────────────────────────────────────────────── */
 
 /** What each scan is called while it runs, and whether it can be stopped. */
@@ -508,8 +515,12 @@ const SCAN_LABEL = {
   spot: 'Asking Spotlight',
 };
 
+/** Which scans can be held, and which of those is currently held. */
+const PAUSABLE = ['deep', 'junk', 'apps', 'home', 'devtools'];
+
 function setScanning(key, on) {
   if (on) state.scanning.add(key); else state.scanning.delete(key);
+  if (!on) state.paused.delete(key);
   const running = state.scanning.size > 0;
 
   $$('[data-scan]').forEach((b) => { b.disabled = running; });
@@ -529,12 +540,41 @@ function setScanning(key, on) {
   }
   const current = [...state.scanning][0];
   strip.dataset.key = current;
-  $('#scan-label').textContent = SCAN_LABEL[current] || 'Scanning';
-  $('#btn-stop').hidden = !['deep', 'junk', 'apps', 'home', 'devtools'].includes(current);
+  const pausable = PAUSABLE.includes(current);
+  $('#btn-stop').hidden = !pausable;
+  $('#btn-pause').hidden = !pausable;
+  paintPause(current);
+}
+
+/**
+ * A paused scan must look paused, or the button reads as broken — which is
+ * exactly the bug this replaces. The strip stops advancing, says so, and offers
+ * Resume in the same place Pause was.
+ */
+function paintPause(key) {
+  const paused = state.paused.has(key);
+  const strip = $('#scanstrip');
+  strip.classList.toggle('paused', paused);
+  const btn = $('#btn-pause');
+  btn.textContent = paused ? 'Resume' : 'Pause';
+  btn.classList.toggle('btn-primary', paused);
+  btn.disabled = false;
+  $('#scan-label').textContent = paused
+    ? `Paused — ${SCAN_LABEL[key] || 'scanning'}`
+    : SCAN_LABEL[key] || 'Scanning';
+  if (paused) $('#scan-bar-wrap').classList.remove('indet');
+}
+
+function setPaused(key, on) {
+  if (on) state.paused.add(key); else state.paused.delete(key);
+  paintPause(key);
 }
 
 /** Report progress into the one strip. */
 function scanProgress({ files, bytes, current }) {
+  // A tick already in flight when the pause landed must not repaint the strip as
+  // if the walk were still moving.
+  if (state.paused.size) return;
   if (files !== undefined) {
     $('#scan-count').textContent = `${files.toLocaleString()} files · ${fmtBytes(bytes || 0)}`;
     $('#scan-bar-wrap').classList.remove('indet');
@@ -552,13 +592,30 @@ function runDeep() {
   setScanning('deep', true);
   $('#hero-headline').textContent = 'Scanning your home folder…';
 
+  // Both a pause and a finish land the same shape, so they share one apply
+  // path: pausing shows the large files, stale files, categories and folders
+  // found so far instead of leaving every panel blank.
+  const applyDeep = (data) => {
+    state.deep = data;
+    state.spotlight = null;
+    renderLarge(); renderOld(); renderDupes(); renderCategories(); renderDeepSummary();
+  };
+
   deepStream = stream(`/api/scan/deep?days=${days}&minLarge=${minLarge}&thorough=${thorough}`, {
     onProgress: scanProgress,
+    onPaused: (data) => {
+      applyDeep(data);
+      setPaused('deep', true);
+      $('#hero-headline').textContent = 'Scan paused';
+      toast(`Paused — showing the ${data.files.toLocaleString()} files found so far`, 'ok');
+    },
+    onResumed: () => {
+      setPaused('deep', false);
+      $('#hero-headline').textContent = 'Scanning your home folder…';
+    },
     onDone: (data) => {
-      state.deep = data;
-      state.spotlight = null;
       setScanning('deep', false);
-      renderLarge(); renderOld(); renderDupes(); renderCategories(); renderDeepSummary();
+      applyDeep(data);
       toast(
         data.partial
           ? `Scan stopped — keeping ${data.files.toLocaleString()} files found in ${(data.elapsed / 1000).toFixed(1)}s`
@@ -573,26 +630,42 @@ function runDeep() {
   });
 }
 
-function runSse(key, url, onDone, onPartial) {
+/**
+ * `apply(data, final)` runs for a pause as well as a finish — `final` is false
+ * when the scan is merely held, so the results appear without the closing toast.
+ */
+function runSse(key, url, apply, onPartial) {
   setScanning(key, true);
   stream(url, {
     onProgress: (p) => {
       scanProgress(p);
       if (p.item) onPartial?.(p.item);
     },
-    onDone: (data) => { setScanning(key, false); onDone(data); },
+    onPaused: (data) => {
+      apply(data, false);
+      setPaused(key, true);
+      toast('Paused — showing what was found so far', 'ok');
+    },
+    onResumed: () => setPaused(key, false),
+    onDone: (data) => { setScanning(key, false); apply(data, true); },
     onError: (msg) => { setScanning(key, false); toast(msg, 'err'); },
   });
 }
 
 const SCANS = {
   deep: runDeep,
-  junk: () => runSse('junk', '/api/scan/junk', (d) => { state.junk = d; renderJunk(); toast(`${fmtBytes(d.reclaimable)} of junk found`, 'ok'); }),
-  apps: () => runSse('apps', '/api/scan/apps', (d) => { state.apps = d; renderApps(); toast(`${d.count} apps · ${fmtBytes(d.total)}`, 'ok'); }),
-  devtools: () => runSse('devtools', '/api/scan/devtools', (d) => {
+  junk: () => runSse('junk', '/api/scan/junk', (d, final) => {
+    state.junk = d; renderJunk();
+    if (final) toast(`${fmtBytes(d.reclaimable)} of junk found`, 'ok');
+  }),
+  apps: () => runSse('apps', '/api/scan/apps', (d, final) => {
+    state.apps = d; renderApps();
+    if (final) toast(`${d.count} apps · ${fmtBytes(d.total)}`, 'ok');
+  }),
+  devtools: () => runSse('devtools', '/api/scan/devtools', (d, final) => {
     state.devtools = d;
     renderDevTools();
-    toast(d.partial ? 'Developer scan stopped — keeping what was found' : 'Developer tools scanned', 'ok');
+    if (final) toast(d.partial ? 'Developer scan stopped — keeping what was found' : 'Developer tools scanned', 'ok');
   }),
   home: () => {
     const partial = { items: [], total: 0, partial: true };
@@ -600,7 +673,10 @@ const SCANS = {
     runSse(
       'home',
       '/api/scan/home',
-      (d) => { state.home = d; renderHomeMap(); toast('Home folder mapped', 'ok'); },
+      (d, final) => {
+        state.home = d; renderHomeMap();
+        if (final) toast('Home folder mapped', 'ok');
+      },
       (item) => {
         partial.items.push(item);
         partial.items.sort((a, b) => b.size - a.size);
@@ -901,19 +977,56 @@ $('#btn-open-storage').addEventListener('click', () => { go('storage'); if (!sta
 $('#btn-empty-trash').addEventListener('click', doEmptyTrash);
 $('#btn-reveal-trash').addEventListener('click', () => post('/api/reveal', { path: `${state.hw?.home || ''}/.Trash` }).catch(() => {}));
 
+/**
+ * Apply one scan action to every scan currently running.
+ *
+ * "Scan this Mac" starts three at once, so a control that only reached the one
+ * named in the strip would leave the other two running behind a button that
+ * says Paused. A failure per scan is expected and ignored: it means that
+ * particular walk had already finished.
+ */
+async function eachScan(action) {
+  const keys = [...state.scanning];
+  const replies = await Promise.all(
+    keys.map((key) =>
+      post(`/api/scan/${action}`, { key })
+        .then((r) => ({ key, state: r.state }))
+        .catch(() => null),
+    ),
+  );
+  return replies.filter(Boolean);
+}
+
+$('#btn-pause').addEventListener('click', async () => {
+  const btn = $('#btn-pause');
+  const resuming = state.paused.size > 0;
+  btn.disabled = true;
+  try {
+    // The server is the authority on whether a walk is held, so the buttons
+    // follow the replies rather than assuming the click worked.
+    const replies = await eachScan(resuming ? 'resume' : 'pause');
+    for (const r of replies) setPaused(r.key, r.state === 'paused');
+  } finally {
+    btn.disabled = false;
+  }
+});
+
 $('#btn-stop').addEventListener('click', async () => {
   const btn = $('#btn-stop');
-  const key = $('#scanstrip').dataset.key || 'deep';
+  const running = [...state.scanning];
   btn.disabled = true;
   btn.textContent = 'Stopping…';
   try {
-    // The stream stays open on purpose: the server finishes the walk early and
-    // still sends its results, so a stopped scan is a usable scan.
-    await post('/api/scan/stop', { key });
-  } catch {
-    // Already finished between the click and the request — nothing to stop.
-    deepStream?.close();
-    setScanning(key, false);
+    // The streams stay open on purpose: the server finishes each walk early and
+    // still sends its results, so a stopped scan is a usable scan. Stop also
+    // releases anything currently paused.
+    const replies = await eachScan('stop');
+    // Nothing answered, so every scan had already finished between the click and
+    // the request. Clear the strip rather than leaving it up.
+    if (!replies.length) {
+      deepStream?.close();
+      for (const key of running) setScanning(key, false);
+    }
   } finally {
     btn.disabled = false;
     btn.textContent = 'Stop';
@@ -995,24 +1108,62 @@ function renderDevTools() {
  * never makes that request itself and the server has no outbound network path
  * at all, so in a browser — or with no connection — this simply never fires.
  */
+/**
+ * Three dismissals, because they mean different things:
+ *
+ *   ×               remind me next launch — the default, and what closing means
+ *   Skip this one   never mention *this* version again, but do mention the next
+ *   Never           stop announcing versions at all
+ *
+ * All three live in localStorage, which the server never reads and nothing ever
+ * transmits. "Never" is recoverable: the About panel's Check for updates item
+ * clears it, so the choice is never a dead end.
+ */
+const UPDATE_PREF = { skipped: 'skipUpdate', muted: 'muteUpdates' };
+let pendingUpdate = null;
+
 window.macpuffinUpdate = ({ version, url } = {}) => {
-  if (!version || localStorage.getItem('skipUpdate') === version) return;
+  if (!version) return;
+  if (localStorage.getItem(UPDATE_PREF.muted) === '1') return;
+  if (localStorage.getItem(UPDATE_PREF.skipped) === version) return;
+
+  pendingUpdate = { version, url: url || `${REPO}/releases/latest` };
+  $('#update-title').textContent = `MacPuffin ${version} is available`;
   $('#update-note').textContent =
-    `You are running v${state.hw?.version || '?'}. Version ${version} is out — the download opens in your browser.`;
-  $('#btn-update-get').href = url || 'https://github.com/veraplot/MacPuffin/releases/latest';
+    `You are running ${state.hw?.version || 'an earlier version'}. `
+    + 'The download opens in your browser — install it over this copy, your settings are kept.';
+  $('#btn-update-get').href = pendingUpdate.url;
+  $('#btn-update-skip').textContent = `Skip ${version}`;
   $('#update-banner').hidden = false;
 };
 
-$('#btn-update-later').addEventListener('click', () => {
-  // Remember the dismissal per version, so the same release is not re-announced.
-  const shown = $('#update-note').textContent.match(/Version ([\d.]+)/)?.[1];
-  if (shown) localStorage.setItem('skipUpdate', shown);
+function closeUpdate() {
   $('#update-banner').hidden = true;
+}
+
+// Closing without choosing is the softest option: it comes back next launch.
+$('#btn-update-later').addEventListener('click', closeUpdate);
+
+$('#btn-update-skip').addEventListener('click', () => {
+  if (pendingUpdate) localStorage.setItem(UPDATE_PREF.skipped, pendingUpdate.version);
+  closeUpdate();
+  toast(`MacPuffin ${pendingUpdate?.version || ''} will not be announced again`, 'ok');
 });
 
-/* ── Reporting: bugs, ideas and crashes ─────────────────────── */
+$('#btn-update-never').addEventListener('click', () => {
+  localStorage.setItem(UPDATE_PREF.muted, '1');
+  closeUpdate();
+  toast('Update notices are off. Turn them back on from the MacPuffin menu.', 'ok');
+});
 
-const REPO = 'https://github.com/veraplot/MacPuffin';
+/** Called by the native menu item, so "Never" is always reversible. */
+window.macpuffinUpdateReset = () => {
+  localStorage.removeItem(UPDATE_PREF.muted);
+  localStorage.removeItem(UPDATE_PREF.skipped);
+  toast('Update notices are back on', 'ok');
+};
+
+/* ── Reporting: bugs, ideas and crashes ─────────────────────── */
 
 /** A GitHub issue URL with the body filled in. Links are opened, never posted:
  *  nothing leaves this machine until you press submit on GitHub yourself. */

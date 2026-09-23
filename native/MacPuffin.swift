@@ -416,6 +416,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         }.resume()
     }
 
+    /// Clears every "not now" the page has stored and asks again, so a muted
+    /// notice can always be brought back.
+    @objc private func recheckForUpdate() {
+        webView.evaluateJavaScript("window.macpuffinUpdateReset && window.macpuffinUpdateReset()")
+        checkForUpdate()
+    }
+
     private func announceUpdate(version: String, page: String) {
         let payload: [String: String] = ["version": version, "url": page]
         guard
@@ -440,6 +447,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         let appItem = NSMenuItem()
         let appMenu = NSMenu()
         appMenu.addItem(withTitle: "About MacPuffin", action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)), keyEquivalent: "")
+        appMenu.addItem(.separator())
+        // "Never show update notices" must not be a one-way door, so the menu
+        // always offers a way back.
+        let updateItem = NSMenuItem(title: "Check for Updates…", action: #selector(recheckForUpdate), keyEquivalent: "")
+        updateItem.target = self
+        appMenu.addItem(updateItem)
         appMenu.addItem(.separator())
         appMenu.addItem(withTitle: "Hide MacPuffin", action: #selector(NSApplication.hide(_:)), keyEquivalent: "h")
         appMenu.addItem(withTitle: "Quit MacPuffin", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")

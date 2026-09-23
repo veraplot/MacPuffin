@@ -350,10 +350,13 @@ input[type="checkbox"] {
   border: 1px solid var(--line-strong); background: transparent;
   cursor: pointer; position: relative; flex: none;
 }
-input[type="checkbox"]:checked { background: var(--accent); border-color: var(--accent); }
+/* Checking a box is the user choosing what to act on, so it carries the brand
+   gradient rather than the attention accent — the accent marks what the app
+   noticed, this marks what the user decided. */
+input[type="checkbox"]:checked { background: var(--brand); border-color: var(--brand-b); }
 input[type="checkbox"]:checked::after {
   content: ""; position: absolute; inset-inline-start: 4px; inset-block-start: 1px;
-  inline-size: 4px; block-size: 8px; border: solid #17130a; border-width: 0 2px 2px 0; transform: rotate(43deg);
+  inline-size: 4px; block-size: 8px; border: solid #fff; border-width: 0 2px 2px 0; transform: rotate(43deg);
 }
 
 /* Safety is stated in words; colour only reinforces it. */
@@ -438,7 +441,21 @@ input[type="checkbox"]:checked::after {
   margin-block-start: var(--s-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 
+/* A held scan reads as held: the bar stops sliding and drops to the resting
+   accent, and the path it stopped on stays on screen as the resume point. */
+.scanstrip.paused .bar > span { animation: none; background: var(--accent-dim); }
+.scanstrip.paused #scan-label { color: var(--accent); }
+
 /* ── Banners ─────────────────────────────────────────────────── */
+
+/* The soft dismissal: a close box, not a button competing with the real
+   choices beside it. */
+.banner-x {
+  appearance: none; background: none; border: 0; cursor: pointer;
+  color: var(--ink-faint); font-size: 16px; line-height: 1;
+  padding: 2px 4px; border-radius: 4px; flex: none;
+}
+.banner-x:hover { color: var(--ink); background: var(--surface-raised); }
 
 .banner {
   display: flex; align-items: center; gap: var(--s-3);

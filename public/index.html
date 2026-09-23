@@ -85,7 +85,8 @@
         <b id="scan-label">Scanning</b>
         <span id="scan-count"></span>
         <span class="spacer"></span>
-        <button class="btn btn-tiny" id="btn-stop">Stop</button>
+        <button class="btn btn-tiny" id="btn-pause" title="Hold the scan where it is — nothing found so far is lost">Pause</button>
+        <button class="btn btn-tiny" id="btn-stop" title="End the scan and keep what it found">Stop</button>
       </div>
       <div class="bar" id="scan-bar-wrap"><span id="scan-bar"></span></div>
       <p id="scan-path"></p>
@@ -108,8 +109,10 @@
         <b id="update-title">A new version is available</b>
         <p id="update-note"></p>
       </div>
-      <button class="btn btn-ghost" id="btn-update-later">Later</button>
-      <a class="btn btn-primary" id="btn-update-get" href="#" target="_blank" rel="noreferrer">Get it</a>
+      <button class="btn btn-ghost" id="btn-update-never" title="Stop announcing new versions altogether">Never</button>
+      <button class="btn btn-ghost" id="btn-update-skip">Skip this one</button>
+      <a class="btn btn-primary" id="btn-update-get" href="#" target="_blank" rel="noreferrer">Download</a>
+      <button class="banner-x" id="btn-update-later" title="Remind me next time I open MacPuffin" aria-label="Remind me later">&times;</button>
     </div>
 
     <div class="banner" id="trash-banner" hidden>

@@ -4,6 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { snapshot, hardware } from './lib/system.js';
 import { deepScan, scanJunk, scanApps, homeMap, spotlightLarge, HOME } from './lib/scan.js';
+import { createControl } from './lib/control.js';
 import { trashMany, emptyDirToTrash, emptyTrash, reveal, isProtected } from './lib/trash.js';
 import { sh } from './lib/util.js';
 import { appIcon, isAppBundle } from './lib/icons.js';
@@ -69,29 +70,56 @@ function sseSend(res, event, data) {
  */
 async function streamScan(req, res, key, runner) {
   sseOpen(res);
+  const control = createControl();
   let disconnected = false;
-  let cancelled = false;
   req.on('close', () => {
     disconnected = true;
+    // A walk parked in a pause would stay parked forever once nobody is
+    // listening, holding descriptors and a live promise chain. Stopping releases
+    // it so the scan unwinds.
+    control.stop();
   });
-  // Registered so POST /api/scan/stop can ask this walk to finish early.
-  running.set(key, () => { cancelled = true; });
 
   const started = Date.now();
+  const elapsed = () => Date.now() - started;
+
+  // Registered so the pause/resume/stop routes can reach this particular walk.
+  // They own the SSE side-effects because only this scope has `res`.
+  running.set(key, {
+    state: () => control.state,
+    pause: () => {
+      if (!control.pause()) return false;
+      // The point of a pause is seeing what has been found, so the snapshot
+      // travels with the event rather than making the client ask for it.
+      const found = control.snapshot();
+      sseSend(res, 'paused', { ...(found || {}), key, paused: true, partial: true, elapsed: elapsed() });
+      logInfo('scan.paused', { key, elapsed: elapsed() });
+      return true;
+    },
+    resume: () => {
+      if (!control.resume()) return false;
+      sseSend(res, 'resumed', { key, elapsed: elapsed() });
+      logInfo('scan.resumed', { key, elapsed: elapsed() });
+      return true;
+    },
+    stop: () => control.stop(),
+  });
   const heartbeat = setInterval(() => {
     if (!res.writableEnded) res.write(': ping\n\n');
   }, 15000);
 
   try {
     const payload = await runner({
-      onProgress: (p) => sseSend(res, 'progress', { ...p, elapsed: Date.now() - started }),
-      shouldStop: () => disconnected || cancelled,
+      onProgress: (p) => sseSend(res, 'progress', { ...p, elapsed: elapsed() }),
+      shouldStop: control.checkpoint,
+      onSnapshot: control.provide,
     });
     // Nobody is listening any more - drop it.
     if (disconnected) return;
-    const result = { ...payload, elapsed: Date.now() - started, partial: cancelled };
+    const stopped = control.stopped;
+    const result = { ...payload, elapsed: elapsed(), partial: stopped };
     cache.set(key, result);
-    if (cancelled) logInfo('scan.stopped', { key, elapsed: result.elapsed });
+    if (stopped) logInfo('scan.stopped', { key, elapsed: result.elapsed });
     sseSend(res, 'done', result);
   } catch (err) {
     sseSend(res, 'error', { message: err?.message || String(err) });
@@ -223,30 +251,36 @@ const server = http.createServer(async (req, res) => {
       const oldDays = Number(url.searchParams.get('days') || 180);
       const minLarge = Number(url.searchParams.get('minLarge') || 100) * 1024 * 1024;
       const thorough = url.searchParams.get('thorough') === '1';
-      await streamScan(req, res, 'deep', ({ onProgress, shouldStop }) =>
-        deepScan(resolved, { oldDays, minLarge, thorough, onProgress, shouldStop }),
+      await streamScan(req, res, 'deep', ({ onProgress, shouldStop, onSnapshot }) =>
+        deepScan(resolved, { oldDays, minLarge, thorough, onProgress, shouldStop, onSnapshot }),
       );
       return;
     }
 
     if (p === '/api/scan/junk') {
-      await streamScan(req, res, 'junk', ({ onProgress, shouldStop }) => scanJunk(onProgress, shouldStop));
+      await streamScan(req, res, 'junk', ({ onProgress, shouldStop, onSnapshot }) =>
+        scanJunk(onProgress, shouldStop, undefined, onSnapshot),
+      );
       return;
     }
 
     if (p === '/api/scan/apps') {
-      await streamScan(req, res, 'apps', ({ onProgress, shouldStop }) => scanApps(onProgress, shouldStop));
+      await streamScan(req, res, 'apps', ({ onProgress, shouldStop, onSnapshot }) =>
+        scanApps(onProgress, shouldStop, undefined, onSnapshot),
+      );
       return;
     }
 
     if (p === '/api/scan/home') {
-      await streamScan(req, res, 'home', ({ onProgress, shouldStop }) => homeMap(onProgress, shouldStop));
+      await streamScan(req, res, 'home', ({ onProgress, shouldStop, onSnapshot }) =>
+        homeMap(onProgress, shouldStop, undefined, onSnapshot),
+      );
       return;
     }
 
     if (p === '/api/scan/devtools') {
-      await streamScan(req, res, 'devtools', ({ onProgress, shouldStop }) =>
-        scanDevTools(onProgress, shouldStop),
+      await streamScan(req, res, 'devtools', ({ onProgress, shouldStop, onSnapshot }) =>
+        scanDevTools(onProgress, shouldStop, onSnapshot),
       );
       return;
     }
@@ -315,15 +349,20 @@ const server = http.createServer(async (req, res) => {
         return;
       }
 
-      if (p === '/api/scan/stop') {
+      // stop ends the walk and keeps what it found; pause holds it in place so
+      // it can be resumed from exactly where it stopped reading.
+      if (p === '/api/scan/stop' || p === '/api/scan/pause' || p === '/api/scan/resume') {
         const key = String(body.key || '');
-        const stop = running.get(key);
-        if (!stop) {
+        const handle = running.get(key);
+        if (!handle) {
           json(res, 404, { error: 'no scan running', key });
           return;
         }
-        stop();
-        json(res, 200, { ok: true, key });
+        const action = p.slice('/api/scan/'.length);
+        const changed = handle[action]();
+        // Not an error: the scan may have finished, or two clicks may have
+        // raced. The caller gets the real state either way.
+        json(res, 200, { ok: true, key, changed, state: handle.state() });
         return;
       }
 
